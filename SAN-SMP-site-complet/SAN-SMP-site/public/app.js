@@ -1,0 +1,8 @@
+const $=s=>document.querySelector(s);
+function copyIP(){navigator.clipboard?.writeText("2SanSmp.aternos.me");alert("Adresse copiée !")}
+function openModal(){$("#modal").style.display="flex"}function closeModal(){$("#modal").style.display="none"}
+async function loadRequests(){const r=await fetch("/api/launch-requests");const data=await r.json();$("#requests").innerHTML=data.length?data.map(x=>`<div class="request"><b>${escapeHTML(x.pseudo)}</b>${x.message?`<br>${escapeHTML(x.message)}`:""}</div>`).join(""):"Aucune demande pour le moment."}
+function escapeHTML(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+$("#launchForm").addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.target);const r=await fetch("/api/launch-requests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(f))});$("#launchResult").textContent=r.ok?"Demande envoyée !":"Erreur, vérifie les champs.";if(r.ok){e.target.reset();loadRequests();setTimeout(closeModal,800)}})
+$("#staffForm").addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.target);const r=await fetch("/api/staff-applications",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(f))});$("#staffResult").textContent=r.ok?"Candidature envoyée !":"Erreur, vérifie les champs.";if(r.ok)e.target.reset()})
+loadRequests();
