@@ -1,4 +1,3 @@
-
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
@@ -50,11 +49,14 @@ function saveData(data) {
 
 app.use(express.json({ limit: "30kb" }));
 
+app.set("trust proxy", 1);
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "CHANGE-ME-ON-RENDER",
     resave: false,
     saveUninitialized: false,
+    proxy: true,
     cookie: {
       httpOnly: true,
       sameSite: "lax",
@@ -167,9 +169,19 @@ app.post("/api/register", async (req, res) => {
       isAdmin: user.isAdmin
     };
 
-    res.json({
-      ok: true,
-      user: req.session.user
+    req.session.save(error => {
+      if (error) {
+        console.error("Erreur sauvegarde session :", error);
+
+        return res.status(500).json({
+          error: "Impossible de sauvegarder la session."
+        });
+      }
+
+      res.json({
+        ok: true,
+        user: req.session.user
+      });
     });
   } catch (error) {
     console.error(error);
@@ -203,9 +215,19 @@ app.post("/api/login", async (req, res) => {
       isAdmin: user.isAdmin
     };
 
-    res.json({
-      ok: true,
-      user: req.session.user
+    req.session.save(error => {
+      if (error) {
+        console.error("Erreur sauvegarde session :", error);
+
+        return res.status(500).json({
+          error: "Impossible de sauvegarder la session."
+        });
+      }
+
+      res.json({
+        ok: true,
+        user: req.session.user
+      });
     });
   } catch (error) {
     console.error(error);
@@ -217,8 +239,18 @@ app.post("/api/login", async (req, res) => {
 });
 
 app.post("/api/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.json({ ok: true });
+  req.session.destroy(error => {
+    if (error) {
+      return res.status(500).json({
+        error: "Impossible de se déconnecter."
+      });
+    }
+
+    res.clearCookie("connect.sid");
+
+    res.json({
+      ok: true
+    });
   });
 });
 
@@ -275,7 +307,9 @@ app.post("/api/launch-requests", requireLogin, (req, res) => {
 
   saveData(data);
 
-  res.json({ ok: true });
+  res.json({
+    ok: true
+  });
 });
 
 // ====================
@@ -330,92 +364,106 @@ app.post("/api/staff-applications", requireLogin, (req, res) => {
 
   saveData(data);
 
-  res.json({ ok: true });
+  res.json({
+    ok: true
+  });
 });
 
 // ====================
 // ADMIN : ACCEPTER / REFUSER
 // ====================
 
-app.post("/api/admin/launch-requests/:id/status", requireAdmin, (req, res) => {
-  const data = readData();
+app.post(
+  "/api/admin/launch-requests/:id/status",
+  requireAdmin,
+  (req, res) => {
+    const data = readData();
 
-  const request = data.launchRequests.find(
-    item => String(item.id) === String(req.params.id)
-  );
+    const request = data.launchRequests.find(
+      item => String(item.id) === String(req.params.id)
+    );
 
-  if (!request) {
-    return res.status(404).json({
-      error: "Demande introuvable."
+    if (!request) {
+      return res.status(404).json({
+        error: "Demande introuvable."
+      });
+    }
+
+    const status = req.body.status;
+
+    if (!["accepted", "rejected"].includes(status)) {
+      return res.status(400).json({
+        error: "Statut invalide."
+      });
+    }
+
+    request.status = status;
+
+    createNotification(
+      data,
+      request.userId,
+      status === "accepted"
+        ? "Demande de lancement acceptée"
+        : "Demande de lancement refusée",
+      status === "accepted"
+        ? "Ta demande de lancement a été acceptée."
+        : "Ta demande de lancement a été refusée.",
+      "launch"
+    );
+
+    saveData(data);
+
+    res.json({
+      ok: true
     });
   }
+);
 
-  const status = req.body.status;
+app.post(
+  "/api/admin/staff-applications/:id/status",
+  requireAdmin,
+  (req, res) => {
+    const data = readData();
 
-  if (!["accepted", "rejected"].includes(status)) {
-    return res.status(400).json({
-      error: "Statut invalide."
+    const application = data.staffApplications.find(
+      item => String(item.id) === String(req.params.id)
+    );
+
+    if (!application) {
+      return res.status(404).json({
+        error: "Candidature introuvable."
+      });
+    }
+
+    const status = req.body.status;
+
+    if (!["accepted", "rejected"].includes(status)) {
+      return res.status(400).json({
+        error: "Statut invalide."
+      });
+    }
+
+    application.status = status;
+
+    createNotification(
+      data,
+      application.userId,
+      status === "accepted"
+        ? "Candidature Staff acceptée"
+        : "Candidature Staff refusée",
+      status === "accepted"
+        ? "Félicitations ! Ta candidature Staff a été acceptée."
+        : "Ta candidature Staff a été refusée.",
+      "staff"
+    );
+
+    saveData(data);
+
+    res.json({
+      ok: true
     });
   }
-
-  request.status = status;
-
-  createNotification(
-    data,
-    request.userId,
-    status === "accepted"
-      ? "Demande de lancement acceptée"
-      : "Demande de lancement refusée",
-    status === "accepted"
-      ? "Ta demande de lancement a été acceptée."
-      : "Ta demande de lancement a été refusée.",
-    "launch"
-  );
-
-  saveData(data);
-
-  res.json({ ok: true });
-});
-
-app.post("/api/admin/staff-applications/:id/status", requireAdmin, (req, res) => {
-  const data = readData();
-
-  const application = data.staffApplications.find(
-    item => String(item.id) === String(req.params.id)
-  );
-
-  if (!application) {
-    return res.status(404).json({
-      error: "Candidature introuvable."
-    });
-  }
-
-  const status = req.body.status;
-
-  if (!["accepted", "rejected"].includes(status)) {
-    return res.status(400).json({
-      error: "Statut invalide."
-    });
-  }
-
-  application.status = status;
-
-  createNotification(
-    data,
-    application.userId,
-    status === "accepted"
-      ? "Candidature Staff acceptée"
-      : "Candidature Staff refusée",
-    status === "accepted"
-      ? "Félicitations ! Ta candidature Staff a été acceptée."
-      : "Ta candidature Staff a été refusée.",
-    "staff"
-  );
-
-  saveData(data);
-
-  res.json({ ok: true });
-});
+);
 
 // ====================
 // NOTIFICATIONS
@@ -450,7 +498,9 @@ app.post("/api/notifications/:id/read", requireLogin, (req, res) => {
 
   saveData(data);
 
-  res.json({ ok: true });
+  res.json({
+    ok: true
+  });
 });
 
 // ====================
