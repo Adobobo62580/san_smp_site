@@ -1,15 +1,269 @@
+
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SAN SMP</title><link rel="stylesheet" href="style.css"></head>
-<body><header><a class="logo" href="#accueil">SAN SMP</a><nav>
-<a href="#rejoindre">Rejoindre</a><a href="#lancer">Lancer Aternos</a><a href="#staff">Candidature Staff</a><a href="#voter">Voter</a>
-</nav></header>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SAN SMP</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>
+  <a class="logo" href="#accueil">SAN SMP</a>
+
+  <nav>
+    <a href="#rejoindre">Rejoindre</a>
+    <a href="#lancer">Lancer Aternos</a>
+    <a href="#staff">Candidature Staff</a>
+    <a href="#voter">Voter</a>
+    <a href="#compte">Compte</a>
+    <a href="#admin" id="adminLink" hidden>Admin</a>
+  </nav>
+</header>
+
 <main>
-<section id="accueil" class="hero"><div><p class="tag">SURVIE • COMMUNAUTÉ • SMP</p><h1>SAN <span>SMP</span></h1><p>Un serveur Minecraft communautaire où tu peux construire, explorer et rejoindre une aventure avec d'autres joueurs.</p><div class="actions"><a class="btn" href="#rejoindre">Rejoindre le serveur</a><a class="btn ghost" href="#lancer">Lancer le serveur</a></div></div></section>
-<section id="rejoindre" class="section"><h2>Rejoindre le serveur</h2><p>Adresse Minecraft Java :</p><div class="ip"><code>2SanSmp.aternos.me</code><button onclick="copyIP()">Copier</button></div><p>Ajoute cette adresse dans <b>Multijoueur → Ajouter un serveur</b>. Le serveur doit être démarré sur Aternos pour pouvoir entrer.</p></section>
-<section id="lancer" class="section dark"><h2>Comment lancer le serveur Aternos</h2><p>Les pseudos Aternos inscrits ici peuvent demander à lancer le serveur. Ne partage jamais ton mot de passe.</p><div id="requests" class="requests">Chargement…</div><button class="btn" onclick="openModal()">+ Je veux lancer</button><p class="small">Pas encore de compte Aternos ? <a href="https://aternos.org/" target="_blank" rel="noreferrer">Crée ton compte Aternos ici</a>.</p></section>
-<section id="staff" class="section"><h2>Candidature Staff</h2><form id="staffForm"><label>Pseudo Minecraft<input name="pseudo" maxlength="32" required></label><label>Pourquoi veux-tu rejoindre le staff ?<textarea name="reason" maxlength="1000" required></textarea></label><button class="btn">Envoyer ma candidature</button><p id="staffResult"></p></form></section>
-<section id="voter" class="section dark"><h2>Voter pour SAN SMP</h2><p>Un vote aide le serveur à gagner en visibilité.</p><a class="btn" href="https://top-serveurs.net/minecraft/vote/san-smp" target="_blank" rel="noreferrer">Voter sur Top-Serveur</a><p class="small">Remplace le lien dans index.html par l’URL exacte de la page SAN SMP dès que tu l’as.</p></section>
-</main><footer>SAN SMP • Pas de Discord obligatoire</footer>
-<div id="modal" class="modal"><div class="modalbox"><button class="close" onclick="closeModal()">×</button><h2>Je veux lancer</h2><form id="launchForm"><label>Pseudo Aternos<input name="pseudo" maxlength="32" required></label><label>Petit message (facultatif)<textarea name="message" maxlength="300"></textarea></label><button class="btn">Envoyer</button><p id="launchResult"></p></form></div></div>
-<script src="app.js"></script></body></html>
+
+<section id="accueil" class="hero">
+  <div>
+    <p class="tag">SURVIE • COMMUNAUTÉ • SMP</p>
+
+    <h1>SAN <span>SMP</span></h1>
+
+    <p>
+      Un serveur Minecraft communautaire où tu peux construire,
+      explorer et rejoindre une aventure avec d'autres joueurs.
+    </p>
+
+    <div class="actions">
+      <a class="btn" href="#rejoindre">Rejoindre le serveur</a>
+      <a class="btn ghost" href="#lancer">Lancer le serveur</a>
+    </div>
+  </div>
+</section>
+
+<section id="rejoindre" class="section">
+  <h2>Rejoindre le serveur</h2>
+
+  <p>Adresse Minecraft Java :</p>
+
+  <div class="ip">
+    <code>2SanSmp.aternos.me</code>
+    <button onclick="copyIP()">Copier</button>
+  </div>
+
+  <p>
+    Ajoute cette adresse dans
+    <b>Multijoueur → Ajouter un serveur</b>.
+    Le serveur doit être démarré sur Aternos pour pouvoir entrer.
+  </p>
+</section>
+
+<section id="compte" class="section">
+  <h2>Mon compte</h2>
+
+  <div id="accountArea">
+
+    <div id="authForms">
+
+      <h3>Créer un compte</h3>
+
+      <form id="registerForm">
+        <label>
+          Pseudo
+          <input name="username" maxlength="32" required>
+        </label>
+
+        <label>
+          Mot de passe
+          <input
+            type="password"
+            name="password"
+            minlength="8"
+            required
+          >
+        </label>
+
+        <button class="btn">Créer mon compte</button>
+
+        <p id="registerResult"></p>
+      </form>
+
+      <hr>
+
+      <h3>Se connecter</h3>
+
+      <form id="loginForm">
+        <label>
+          Pseudo
+          <input name="username" required>
+        </label>
+
+        <label>
+          Mot de passe
+          <input type="password" name="password" required>
+        </label>
+
+        <button class="btn">Se connecter</button>
+
+        <p id="loginResult"></p>
+      </form>
+
+    </div>
+
+    <div id="loggedArea" hidden>
+      <h3>Bienvenue <span id="usernameDisplay"></span> !</h3>
+
+      <p>Tu es connecté à ton compte SAN SMP.</p>
+
+      <button class="btn" onclick="logout()">Se déconnecter</button>
+    </div>
+
+  </div>
+</section>
+
+<section id="notifications" class="section" hidden>
+  <h2>🔔 Mes notifications</h2>
+
+  <div id="notificationsList">
+    Chargement…
+  </div>
+</section>
+
+<section id="lancer" class="section dark">
+  <h2>Comment lancer le serveur Aternos</h2>
+
+  <p>
+    Connecte-toi pour envoyer une demande de lancement.
+    Ne partage jamais ton mot de passe Aternos.
+  </p>
+
+  <div id="requests" class="requests">
+    Connecte-toi pour voir les demandes.
+  </div>
+
+  <button class="btn" onclick="openModal()">
+    + Je veux lancer
+  </button>
+
+  <p class="small">
+    Pas encore de compte Aternos ?
+    <a
+      href="https://aternos.org/"
+      target="_blank"
+      rel="noreferrer"
+    >
+      Crée ton compte Aternos ici
+    </a>.
+  </p>
+</section>
+
+<section id="staff" class="section">
+  <h2>Candidature Staff</h2>
+
+  <p>
+    Connecte-toi pour envoyer ta candidature.
+  </p>
+
+  <form id="staffForm">
+
+    <label>
+      Pseudo Minecraft
+      <input name="pseudo" maxlength="32" required>
+    </label>
+
+    <label>
+      Pourquoi veux-tu rejoindre le staff ?
+      <textarea name="reason" maxlength="1000" required></textarea>
+    </label>
+
+    <button class="btn">Envoyer ma candidature</button>
+
+    <p id="staffResult"></p>
+
+  </form>
+</section>
+
+<section id="voter" class="section dark">
+  <h2>Voter pour SAN SMP</h2>
+
+  <p>
+    Un vote aide le serveur à gagner en visibilité.
+  </p>
+
+  <a
+    class="btn"
+    href="https://top-serveurs.net/minecraft/vote/san-smp"
+    target="_blank"
+    rel="noreferrer"
+  >
+    Voter sur Top-Serveur
+  </a>
+
+  <p class="small">
+    Remplace le lien par l’URL exacte de la page SAN SMP dès que tu l’as.
+  </p>
+</section>
+
+<section id="admin" class="section" hidden>
+  <h2>🛡️ Panel administrateur</h2>
+
+  <p>
+    Bienvenue Adosaurus3614 !
+  </p>
+
+  <h3>Demandes de lancement</h3>
+
+  <div id="adminLaunchRequests">
+    Chargement…
+  </div>
+
+  <h3>Candidatures Staff</h3>
+
+  <div id="adminStaffApplications">
+    Chargement…
+  </div>
+
+</section>
+
+</main>
+
+<footer>
+  SAN SMP • Pas de Discord obligatoire
+</footer>
+
+<div id="modal" class="modal">
+
+  <div class="modalbox">
+
+    <button class="close" onclick="closeModal()">×</button>
+
+    <h2>Je veux lancer</h2>
+
+    <form id="launchForm">
+
+      <label>
+        Pseudo Aternos
+        <input name="pseudo" maxlength="32" required>
+      </label>
+
+      <label>
+        Petit message (facultatif)
+        <textarea name="message" maxlength="300"></textarea>
+      </label>
+
+      <button class="btn">Envoyer</button>
+
+      <p id="launchResult"></p>
+
+    </form>
+
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
