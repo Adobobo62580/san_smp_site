@@ -1,29 +1,462 @@
+
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const bcrypt = require("bcryptjs");
+const session = require("express-session");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+const ADMIN_USERNAME = "Adosaurus3614";
+
 const dataDir = path.join(__dirname, "data");
 const dataFile = path.join(dataDir, "site-data.json");
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, {recursive:true});
-if (!fs.existsSync(dataFile)) fs.writeFileSync(dataFile, JSON.stringify({launchRequests:[],staffApplications:[]}, null, 2));
-const readData = () => JSON.parse(fs.readFileSync(dataFile, "utf8"));
-const saveData = d => fs.writeFileSync(dataFile, JSON.stringify(d, null, 2));
-app.use(express.json({limit:"20kb"}));
+
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+if (!fs.existsSync(dataFile)) {
+  fs.writeFileSync(
+    dataFile,
+    JSON.stringify(
+      {
+        users: [],
+        launchRequests: [],
+        staffApplications: [],
+        notifications: []
+      },
+      null,
+      2
+    )
+  );
+}
+
+function readData() {
+  const data = JSON.parse(fs.readFileSync(dataFile, "utf8"));
+
+  data.users ||= [];
+  data.launchRequests ||= [];
+  data.staffApplications ||= [];
+  data.notifications ||= [];
+
+  return data;
+}
+
+function saveData(data) {
+  fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
+}
+
+app.use(express.json({ limit: "30kb" }));
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "CHANGE-ME-ON-RENDER",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 1000 * 60 * 60 * 24 * 7
+    }
+  })
+);
+
 app.use(express.static(path.join(__dirname, "public")));
-app.get("/api/launch-requests", (req,res) => res.json(readData().launchRequests));
-app.post("/api/launch-requests", (req,res) => {
-  const pseudo = String(req.body.pseudo||"").trim();
-  const message = String(req.body.message||"").trim();
-  if (!pseudo || pseudo.length > 32 || message.length > 300) return res.status(400).json({error:"Informations invalides."});
-  const d=readData(); d.launchRequests.unshift({id:Date.now(),pseudo,message,createdAt:new Date().toISOString()}); saveData(d);
-  res.json({ok:true});
+
+// ====================
+// UTILITAIRES
+// ====================
+
+function cleanUsername(value) {
+  return String(value || "").trim();
+}
+
+function cleanText(value) {
+  return String(value || "").trim();
+}
+
+function requireLogin(req, res, next) {
+  if (!req.session.user) {
+    return res.status(401).json({
+      error: "Tu dois être connecté."
+    });
+  }
+
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  if (!req.session.user || !req.session.user.isAdmin) {
+    return res.status(403).json({
+      error: "Accès réservé à l'administrateur."
+    });
+  }
+
+  next();
+}
+
+function createNotification(data, userId, title, message, type) {
+  data.notifications.unshift({
+    id: Date.now() + Math.random(),
+    userId,
+    title,
+    message,
+    type,
+    isRead: false,
+    createdAt: new Date().toISOString()
+  });
+}
+
+// ====================
+// COMPTES
+// ====================
+
+app.post("/api/register", async (req, res) => {
+  try {
+    const username = cleanUsername(req.body.username);
+    const password = String(req.body.password || "");
+
+    if (!/^[a-zA-Z0-9_]{3,32}$/.test(username)) {
+      return res.status(400).json({
+        error: "Pseudo invalide."
+      });
+    }
+
+    if (password.length < 8 || password.length > 100) {
+      return res.status(400).json({
+        error: "Le mot de passe doit contenir entre 8 et 100 caractères."
+      });
+    }
+
+    const data = readData();
+
+    if (
+      data.users.some(
+        user => user.username.toLowerCase() === username.toLowerCase()
+      )
+    ) {
+      return res.status(409).json({
+        error: "Ce pseudo est déjà utilisé."
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const isAdmin =
+      username.toLowerCase() === ADMIN_USERNAME.toLowerCase() &&
+      process.env.ADMIN_PASSWORD &&
+      password === process.env.ADMIN_PASSWORD;
+
+    const user = {
+      id: Date.now(),
+      username,
+      passwordHash,
+      isAdmin: Boolean(isAdmin),
+      createdAt: new Date().toISOString()
+    };
+
+    data.users.push(user);
+    saveData(data);
+
+    req.session.user = {
+      id: user.id,
+      username: user.username,
+      isAdmin: user.isAdmin
+    };
+
+    res.json({
+      ok: true,
+      user: req.session.user
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Impossible de créer le compte."
+    });
+  }
 });
-app.post("/api/staff-applications", (req,res) => {
-  const pseudo = String(req.body.pseudo||"").trim();
-  const reason = String(req.body.reason||"").trim();
-  if (!pseudo || !reason || pseudo.length>32 || reason.length>1000) return res.status(400).json({error:"Remplis tous les champs correctement."});
-  const d=readData(); d.staffApplications.unshift({id:Date.now(),pseudo,reason,createdAt:new Date().toISOString()}); saveData(d);
-  res.json({ok:true});
+
+app.post("/api/login", async (req, res) => {
+  try {
+    const username = cleanUsername(req.body.username);
+    const password = String(req.body.password || "");
+
+    const data = readData();
+
+    const user = data.users.find(
+      user => user.username.toLowerCase() === username.toLowerCase()
+    );
+
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      return res.status(401).json({
+        error: "Pseudo ou mot de passe incorrect."
+      });
+    }
+
+    req.session.user = {
+      id: user.id,
+      username: user.username,
+      isAdmin: user.isAdmin
+    };
+
+    res.json({
+      ok: true,
+      user: req.session.user
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Impossible de se connecter."
+    });
+  }
 });
-app.listen(PORT,()=>console.log(`SAN SMP lancé sur http://localhost:${PORT}`));
+
+app.post("/api/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.json({ ok: true });
+  });
+});
+
+app.get("/api/me", (req, res) => {
+  res.json({
+    user: req.session.user || null
+  });
+});
+
+// ====================
+// DEMANDES DE LANCEMENT
+// ====================
+
+app.get("/api/launch-requests", requireAdmin, (req, res) => {
+  const data = readData();
+
+  res.json(data.launchRequests);
+});
+
+app.post("/api/launch-requests", requireLogin, (req, res) => {
+  const pseudo = cleanUsername(req.body.pseudo);
+  const message = cleanText(req.body.message);
+
+  if (!pseudo || pseudo.length > 32 || message.length > 300) {
+    return res.status(400).json({
+      error: "Informations invalides."
+    });
+  }
+
+  const data = readData();
+
+  const request = {
+    id: Date.now(),
+    userId: req.session.user.id,
+    pseudo,
+    message,
+    status: "pending",
+    createdAt: new Date().toISOString()
+  };
+
+  data.launchRequests.unshift(request);
+
+  const admin = data.users.find(user => user.isAdmin);
+
+  if (admin) {
+    createNotification(
+      data,
+      admin.id,
+      "Nouvelle demande de lancement",
+      `${pseudo} demande de lancer le serveur.`,
+      "launch"
+    );
+  }
+
+  saveData(data);
+
+  res.json({ ok: true });
+});
+
+// ====================
+// CANDIDATURES STAFF
+// ====================
+
+app.get("/api/staff-applications", requireAdmin, (req, res) => {
+  const data = readData();
+
+  res.json(data.staffApplications);
+});
+
+app.post("/api/staff-applications", requireLogin, (req, res) => {
+  const pseudo = cleanUsername(req.body.pseudo);
+  const reason = cleanText(req.body.reason);
+
+  if (
+    !pseudo ||
+    !reason ||
+    pseudo.length > 32 ||
+    reason.length > 1000
+  ) {
+    return res.status(400).json({
+      error: "Remplis tous les champs correctement."
+    });
+  }
+
+  const data = readData();
+
+  const application = {
+    id: Date.now(),
+    userId: req.session.user.id,
+    pseudo,
+    reason,
+    status: "pending",
+    createdAt: new Date().toISOString()
+  };
+
+  data.staffApplications.unshift(application);
+
+  const admin = data.users.find(user => user.isAdmin);
+
+  if (admin) {
+    createNotification(
+      data,
+      admin.id,
+      "Nouvelle candidature Staff",
+      `${pseudo} a envoyé une candidature Staff.`,
+      "staff"
+    );
+  }
+
+  saveData(data);
+
+  res.json({ ok: true });
+});
+
+// ====================
+// ADMIN : ACCEPTER / REFUSER
+// ====================
+
+app.post("/api/admin/launch-requests/:id/status", requireAdmin, (req, res) => {
+  const data = readData();
+
+  const request = data.launchRequests.find(
+    item => String(item.id) === String(req.params.id)
+  );
+
+  if (!request) {
+    return res.status(404).json({
+      error: "Demande introuvable."
+    });
+  }
+
+  const status = req.body.status;
+
+  if (!["accepted", "rejected"].includes(status)) {
+    return res.status(400).json({
+      error: "Statut invalide."
+    });
+  }
+
+  request.status = status;
+
+  createNotification(
+    data,
+    request.userId,
+    status === "accepted"
+      ? "Demande de lancement acceptée"
+      : "Demande de lancement refusée",
+    status === "accepted"
+      ? "Ta demande de lancement a été acceptée."
+      : "Ta demande de lancement a été refusée.",
+    "launch"
+  );
+
+  saveData(data);
+
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/staff-applications/:id/status", requireAdmin, (req, res) => {
+  const data = readData();
+
+  const application = data.staffApplications.find(
+    item => String(item.id) === String(req.params.id)
+  );
+
+  if (!application) {
+    return res.status(404).json({
+      error: "Candidature introuvable."
+    });
+  }
+
+  const status = req.body.status;
+
+  if (!["accepted", "rejected"].includes(status)) {
+    return res.status(400).json({
+      error: "Statut invalide."
+    });
+  }
+
+  application.status = status;
+
+  createNotification(
+    data,
+    application.userId,
+    status === "accepted"
+      ? "Candidature Staff acceptée"
+      : "Candidature Staff refusée",
+    status === "accepted"
+      ? "Félicitations ! Ta candidature Staff a été acceptée."
+      : "Ta candidature Staff a été refusée.",
+    "staff"
+  );
+
+  saveData(data);
+
+  res.json({ ok: true });
+});
+
+// ====================
+// NOTIFICATIONS
+// ====================
+
+app.get("/api/notifications", requireLogin, (req, res) => {
+  const data = readData();
+
+  const notifications = data.notifications.filter(
+    notification => notification.userId === req.session.user.id
+  );
+
+  res.json(notifications);
+});
+
+app.post("/api/notifications/:id/read", requireLogin, (req, res) => {
+  const data = readData();
+
+  const notification = data.notifications.find(
+    item =>
+      String(item.id) === String(req.params.id) &&
+      item.userId === req.session.user.id
+  );
+
+  if (!notification) {
+    return res.status(404).json({
+      error: "Notification introuvable."
+    });
+  }
+
+  notification.isRead = true;
+
+  saveData(data);
+
+  res.json({ ok: true });
+});
+
+// ====================
+// DÉMARRAGE
+// ====================
+
+app.listen(PORT, () => {
+  console.log(`SAN SMP lancé sur le port ${PORT}`);
+});
