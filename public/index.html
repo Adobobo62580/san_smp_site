@@ -3,42 +3,82 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta
+    name="description"
+    content="SAN SMP — Rejoins notre communauté Minecraft, discute avec les membres et participe à l'aventure."
+  >
+
   <title>SAN SMP</title>
+
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
   <header class="site-header">
-    <div class="logo">
+    <div class="logo" aria-label="SAN SMP">
       SAN <span>SMP</span>
     </div>
 
-    <nav>
-      <button id="homeBtn">Accueil</button>
-      <button id="messagesBtn">Messagerie</button>
-      <button id="notificationsBtn">Notifications</button>
-      <button id="loginNavBtn">Connexion</button>
-      <button id="logoutBtn" class="hidden">Déconnexion</button>
+    <nav aria-label="Navigation principale">
+      <button type="button" id="homeBtn">
+        Accueil
+      </button>
+
+      <button type="button" id="messagesBtn">
+        Messagerie
+      </button>
+
+      <button type="button" id="notificationsBtn">
+        Notifications
+      </button>
+
+      <button type="button" id="loginNavBtn">
+        Connexion
+      </button>
+
+      <button
+        type="button"
+        id="logoutBtn"
+        class="hidden"
+      >
+        Déconnexion
+      </button>
     </nav>
   </header>
 
   <main class="container">
 
     <!-- ACCUEIL -->
-    <section id="homeSection" class="page-section">
+    <section
+      id="homeSection"
+      class="page-section"
+      aria-labelledby="homeTitle"
+    >
       <div class="hero">
-        <h1>Bienvenue sur SAN SMP</h1>
+        <h1 id="homeTitle">
+          Bienvenue sur SAN SMP
+        </h1>
+
         <p>
           Rejoins notre communauté, découvre le serveur et participe à
           l'aventure.
         </p>
 
         <div class="hero-actions">
-          <button id="launchBtn" class="primary-btn">
+          <button
+            type="button"
+            id="launchBtn"
+            class="primary-btn"
+          >
             Demander un lancement
           </button>
 
-          <button id="staffBtn" class="secondary-btn">
+          <button
+            type="button"
+            id="staffBtn"
+            class="secondary-btn"
+          >
             Devenir membre du staff
           </button>
         </div>
@@ -47,80 +87,128 @@
       <div class="info-grid">
         <article class="info-card">
           <h2>Communauté</h2>
-          <p>Discute avec les autres joueurs et participe à la vie du serveur.</p>
+          <p>
+            Discute avec les autres joueurs et participe à la vie du serveur.
+          </p>
         </article>
 
         <article class="info-card">
           <h2>Serveur</h2>
-          <p>Prépare-toi pour une aventure SMP avec les autres membres.</p>
+          <p>
+            Prépare-toi pour une aventure SMP avec les autres membres.
+          </p>
         </article>
 
         <article class="info-card">
           <h2>Staff</h2>
-          <p>Tu peux proposer ta candidature pour rejoindre l'équipe.</p>
+          <p>
+            Tu peux proposer ta candidature pour rejoindre l'équipe.
+          </p>
         </article>
       </div>
     </section>
 
     <!-- CONNEXION -->
-    <section id="loginSection" class="page-section hidden">
+    <section
+      id="loginSection"
+      class="page-section hidden"
+      aria-labelledby="loginTitle"
+    >
       <div class="form-card">
-        <h2>Connexion</h2>
+        <h2 id="loginTitle">
+          Connexion
+        </h2>
 
         <form id="loginForm">
-          <label for="loginUsername">Pseudo</label>
+          <label for="loginUsername">
+            Pseudo
+          </label>
+
           <input
             type="text"
             id="loginUsername"
-            required
-            maxlength="24"
-            autocomplete="username"
-          >
-
-          <label for="loginPassword">Mot de passe</label>
-          <input
-            type="password"
-            id="loginPassword"
-            required
-            autocomplete="current-password"
-          >
-
-          <button type="submit" class="primary-btn">
-            Se connecter
-          </button>
-        </form>
-
-        <p class="form-link">
-          Pas encore de compte ?
-          <button id="showRegisterBtn" class="link-btn">
-            Créer un compte
-          </button>
-        </p>
-
-        <p id="loginMessage" class="message"></p>
-      </div>
-    </section>
-
-    <!-- INSCRIPTION -->
-    <section id="registerSection" class="page-section hidden">
-      <div class="form-card">
-        <h2>Créer un compte</h2>
-
-        <form id="registerForm">
-          <label for="registerUsername">Pseudo</label>
-          <input
-            type="text"
-            id="registerUsername"
+            name="username"
             required
             minlength="3"
             maxlength="24"
             autocomplete="username"
           >
 
-          <label for="registerPassword">Mot de passe</label>
+          <label for="loginPassword">
+            Mot de passe
+          </label>
+
+          <input
+            type="password"
+            id="loginPassword"
+            name="password"
+            required
+            autocomplete="current-password"
+          >
+
+          <button
+            type="submit"
+            class="primary-btn"
+          >
+            Se connecter
+          </button>
+        </form>
+
+        <p class="form-link">
+          Pas encore de compte ?
+
+          <button
+            type="button"
+            id="showRegisterBtn"
+            class="link-btn"
+          >
+            Créer un compte
+          </button>
+        </p>
+
+        <p
+          id="loginMessage"
+          class="message"
+          role="status"
+          aria-live="polite"
+        ></p>
+      </div>
+    </section>
+
+    <!-- INSCRIPTION -->
+    <section
+      id="registerSection"
+      class="page-section hidden"
+      aria-labelledby="registerTitle"
+    >
+      <div class="form-card">
+        <h2 id="registerTitle">
+          Créer un compte
+        </h2>
+
+        <form id="registerForm">
+          <label for="registerUsername">
+            Pseudo
+          </label>
+
+          <input
+            type="text"
+            id="registerUsername"
+            name="username"
+            required
+            minlength="3"
+            maxlength="24"
+            autocomplete="username"
+          >
+
+          <label for="registerPassword">
+            Mot de passe
+          </label>
+
           <input
             type="password"
             id="registerPassword"
+            name="password"
             required
             minlength="6"
             autocomplete="new-password"
@@ -133,218 +221,388 @@
           <input
             type="password"
             id="registerPasswordConfirm"
+            name="passwordConfirm"
             required
             minlength="6"
             autocomplete="new-password"
           >
 
-          <button type="submit" class="primary-btn">
+          <button
+            type="submit"
+            class="primary-btn"
+          >
             S'inscrire
           </button>
         </form>
 
         <p class="form-link">
           Déjà un compte ?
-          <button id="showLoginBtn" class="link-btn">
+
+          <button
+            type="button"
+            id="showLoginBtn"
+            class="link-btn"
+          >
             Se connecter
           </button>
         </p>
 
-        <p id="registerMessage" class="message"></p>
+        <p
+          id="registerMessage"
+          class="message"
+          role="status"
+          aria-live="polite"
+        ></p>
       </div>
     </section>
 
     <!-- MESSAGERIE -->
-    <section id="messagesSection" class="page-section hidden">
+    <section
+      id="messagesSection"
+      class="page-section hidden"
+      aria-labelledby="messagesTitle"
+    >
       <div class="section-heading">
-        <h2>Messagerie</h2>
-        <p>Discute avec les membres de SAN SMP.</p>
+        <h2 id="messagesTitle">
+          Messagerie
+        </h2>
+
+        <p>
+          Discute avec les membres de SAN SMP.
+        </p>
       </div>
 
-      <div id="messagesLoginNotice" class="notice hidden">
+      <div
+        id="messagesLoginNotice"
+        class="notice hidden"
+        role="alert"
+      >
         Tu dois être connecté pour utiliser la messagerie.
       </div>
 
-      <div id="messagesContent" class="messages-layout hidden">
+      <div
+        id="messagesContent"
+        class="messages-layout hidden"
+      >
         <aside class="users-panel">
-          <h3>Membres</h3>
+          <h3>
+            Membres
+          </h3>
+
           <div id="usersList">
-            <p class="muted">Chargement des membres...</p>
+            <p class="muted">
+              Chargement des membres...
+            </p>
           </div>
         </aside>
 
         <div class="chat-panel">
           <div class="chat-header">
-            <h3 id="chatTitle">Sélectionne un membre</h3>
+            <h3 id="chatTitle">
+              Sélectionne un membre
+            </h3>
           </div>
 
-          <div id="chatMessages" class="chat-messages">
+          <div
+            id="chatMessages"
+            class="chat-messages"
+            aria-live="polite"
+          >
             <p class="muted">
               Sélectionne un membre pour commencer une conversation.
             </p>
           </div>
 
-          <form id="messageForm" class="message-form">
+          <form
+            id="messageForm"
+            class="message-form"
+          >
+            <label
+              for="messageInput"
+              class="sr-only"
+            >
+              Ton message
+            </label>
+
             <input
               type="text"
               id="messageInput"
+              name="message"
               placeholder="Écris un message..."
               maxlength="500"
+              autocomplete="off"
               required
             >
 
-            <button type="submit" class="primary-btn">
+            <button
+              type="submit"
+              class="primary-btn"
+            >
               Envoyer
             </button>
           </form>
 
-          <p id="messageStatus" class="message"></p>
+          <p
+            id="messageStatus"
+            class="message"
+            role="status"
+            aria-live="polite"
+          ></p>
         </div>
       </div>
     </section>
 
     <!-- NOTIFICATIONS -->
-    <section id="notificationsSection" class="page-section hidden">
+    <section
+      id="notificationsSection"
+      class="page-section hidden"
+      aria-labelledby="notificationsTitle"
+    >
       <div class="section-heading">
-        <h2>Notifications</h2>
-        <p>Retrouve ici les informations importantes.</p>
+        <h2 id="notificationsTitle">
+          Notifications
+        </h2>
+
+        <p>
+          Retrouve ici les informations importantes.
+        </p>
       </div>
 
-      <div id="notificationsList" class="notifications-list">
-        <p class="muted">Chargement des notifications...</p>
+      <div
+        id="notificationsList"
+        class="notifications-list"
+        aria-live="polite"
+      >
+        <p class="muted">
+          Chargement des notifications...
+        </p>
       </div>
     </section>
 
     <!-- DEMANDE DE LANCEMENT -->
-    <section id="launchSection" class="page-section hidden">
+    <section
+      id="launchSection"
+      class="page-section hidden"
+      aria-labelledby="launchTitle"
+    >
       <div class="form-card">
-        <h2>Demander un lancement</h2>
+        <h2 id="launchTitle">
+          Demander un lancement
+        </h2>
 
         <form id="launchForm">
-          <label for="launchReason">Pourquoi veux-tu lancer le serveur ?</label>
+          <label for="launchReason">
+            Pourquoi veux-tu lancer le serveur ?
+          </label>
 
           <textarea
             id="launchReason"
+            name="reason"
             rows="5"
             maxlength="1000"
             required
           ></textarea>
 
-          <button type="submit" class="primary-btn">
+          <button
+            type="submit"
+            class="primary-btn"
+          >
             Envoyer la demande
           </button>
         </form>
 
-        <p id="launchMessage" class="message"></p>
+        <p
+          id="launchMessage"
+          class="message"
+          role="status"
+          aria-live="polite"
+        ></p>
       </div>
     </section>
 
     <!-- CANDIDATURE STAFF -->
-    <section id="staffSection" class="page-section hidden">
+    <section
+      id="staffSection"
+      class="page-section hidden"
+      aria-labelledby="staffTitle"
+    >
       <div class="form-card">
-        <h2>Candidature staff</h2>
+        <h2 id="staffTitle">
+          Candidature staff
+        </h2>
 
         <form id="staffForm">
-          <label for="staffAge">Âge</label>
+          <label for="staffAge">
+            Âge
+          </label>
+
           <input
             type="number"
             id="staffAge"
+            name="age"
             min="13"
             max="100"
             required
           >
 
-          <label for="staffExperience">Expérience</label>
+          <label for="staffExperience">
+            Expérience
+          </label>
+
           <textarea
             id="staffExperience"
+            name="experience"
             rows="4"
             maxlength="1500"
             required
           ></textarea>
 
-          <label for="staffMotivation">Motivations</label>
+          <label for="staffMotivation">
+            Motivations
+          </label>
+
           <textarea
             id="staffMotivation"
+            name="motivation"
             rows="5"
             maxlength="1500"
             required
           ></textarea>
 
-          <button type="submit" class="primary-btn">
+          <button
+            type="submit"
+            class="primary-btn"
+          >
             Envoyer ma candidature
           </button>
         </form>
 
-        <p id="staffMessage" class="message"></p>
+        <p
+          id="staffMessage"
+          class="message"
+          role="status"
+          aria-live="polite"
+        ></p>
       </div>
     </section>
 
     <!-- ADMINISTRATION -->
-    <section id="adminSection" class="page-section hidden">
+    <section
+      id="adminSection"
+      class="page-section hidden"
+      aria-labelledby="adminTitle"
+    >
       <div class="section-heading">
-        <h2>Administration</h2>
-        <p>Espace réservé à <strong>Adosaurus3614</strong>.</p>
+        <h2 id="adminTitle">
+          Administration
+        </h2>
+
+        <p>
+          Espace réservé à <strong>Adosaurus3614</strong>.
+        </p>
       </div>
 
       <div class="admin-grid">
+
         <article class="admin-card">
-          <h3>Demandes de lancement</h3>
+          <h3>
+            Demandes de lancement
+          </h3>
+
           <div id="adminLaunchRequests">
-            <p class="muted">Chargement...</p>
+            <p class="muted">
+              Chargement...
+            </p>
           </div>
         </article>
 
         <article class="admin-card">
-          <h3>Candidatures staff</h3>
+          <h3>
+            Candidatures staff
+          </h3>
+
           <div id="adminStaffApplications">
-            <p class="muted">Chargement...</p>
+            <p class="muted">
+              Chargement...
+            </p>
           </div>
         </article>
 
         <article class="admin-card">
-          <h3>Utilisateurs</h3>
+          <h3>
+            Utilisateurs
+          </h3>
+
           <div id="adminUsers">
-            <p class="muted">Chargement...</p>
+            <p class="muted">
+              Chargement...
+            </p>
           </div>
         </article>
 
         <article class="admin-card">
-          <h3>Envoyer une notification</h3>
+          <h3>
+            Envoyer une notification
+          </h3>
 
           <form id="notificationForm">
-            <label for="notificationTitle">Titre</label>
+            <label for="notificationTitle">
+              Titre
+            </label>
+
             <input
               type="text"
               id="notificationTitle"
+              name="title"
               maxlength="100"
               required
             >
 
-            <label for="notificationContent">Message</label>
+            <label for="notificationContent">
+              Message
+            </label>
+
             <textarea
               id="notificationContent"
+              name="content"
               rows="4"
               maxlength="1000"
               required
             ></textarea>
 
-            <button type="submit" class="primary-btn">
+            <button
+              type="submit"
+              class="primary-btn"
+            >
               Publier
             </button>
           </form>
 
-          <p id="notificationMessage" class="message"></p>
+          <p
+            id="notificationMessage"
+            class="message"
+            role="status"
+            aria-live="polite"
+          ></p>
         </article>
+
       </div>
     </section>
 
     <!-- MESSAGE GLOBAL -->
-    <div id="globalMessage" class="global-message"></div>
+    <div
+      id="globalMessage"
+      class="global-message"
+      role="status"
+      aria-live="polite"
+    ></div>
 
   </main>
 
   <footer class="site-footer">
-    <p>© 2026 SAN SMP — Tous droits réservés.</p>
+    <p>
+      © 2026 SAN SMP — Tous droits réservés.
+    </p>
   </footer>
 
   <script src="app.js"></script>
