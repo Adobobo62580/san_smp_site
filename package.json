@@ -11,10 +11,9 @@ Site officiel de SAN SMP.
 - `site-data.json` : données du site
 - `package.json` : dépendances du projet
 
-## Lancement
+## Installation
 
-Si Node.js est utilisé :
+Installe Node.js, puis ouvre un terminal dans le dossier du projet.
 
 ```bash
 npm install
-npm start
