@@ -9,11 +9,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const ADMIN_USERNAME = "Adosaurus3614";
-const DATA_FILE = path.join(__dirname, "site-data.json");
+const DATA_FILE = path.join(__dirname, "data", "site-data.json");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, "public")));
 
 app.use(
   session({
@@ -615,7 +615,7 @@ app.post(
 /* PAGE PRINCIPALE */
 
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 /* DÉMARRAGE RENDER */
