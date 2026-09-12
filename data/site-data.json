@@ -1,9 +1,7 @@
 {
   "users": [],
-  "launchRequests": [],
-  "staffApplications": [],
-  "notifications": [],
   "messages": [],
-  "staffMembers": [],
-  "bans": []
+  "notifications": [],
+  "launchRequests": [],
+  "staffApplications": []
 }
