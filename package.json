@@ -1,19 +1,10 @@
-# SAN SMP
-
-Site officiel de SAN SMP.
-
-## Fichiers
-
-- `index.html` : page principale
-- `style.css` : design du site
-- `app.js` : fonctionnalités du site
-- `server.js` : serveur et API
-- `site-data.json` : données du site
-- `package.json` : dépendances du projet
-
-## Installation
-
-Installe Node.js, puis ouvre un terminal dans le dossier du projet.
-
-```bash
-npm install
+{
+  "name": "san-smp-site",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
