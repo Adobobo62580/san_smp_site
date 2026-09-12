@@ -63,6 +63,7 @@ function loadData() {
 
 function cleanText(value, maxLength) {
   if (typeof value !== "string") return "";
+
   return value.trim().slice(0, maxLength);
 }
 
@@ -109,6 +110,7 @@ function requireLogin(req, res, next) {
   }
 
   req.currentUser = user;
+
   next();
 }
 
@@ -162,13 +164,15 @@ app.post("/api/register", async (req, res) => {
 
   if (!/^[a-zA-Z0-9_]+$/.test(username)) {
     return res.status(400).json({
-      error: "Le pseudo ne peut contenir que des lettres, chiffres et _."
+      error:
+        "Le pseudo ne peut contenir que des lettres, chiffres et _."
     });
   }
 
   if (typeof password !== "string" || password.length < 6) {
     return res.status(400).json({
-      error: "Le mot de passe doit contenir au moins 6 caractères."
+      error:
+        "Le mot de passe doit contenir au moins 6 caractères."
     });
   }
 
@@ -354,7 +358,7 @@ app.get("/api/messages/:userId", requireLogin, (req, res) => {
   });
 });
 
-/* NOTIFICATIONS */
+/* NOTIFICATIONS : LECTURE UNIQUEMENT */
 
 app.get("/api/notifications", requireLogin, (req, res) => {
   const data = loadData();
@@ -473,6 +477,7 @@ app.patch(
     }
 
     request.status = status;
+
     saveData(data);
 
     res.json({
@@ -522,6 +527,7 @@ app.patch(
     }
 
     application.status = status;
+
     saveData(data);
 
     res.json({
@@ -545,16 +551,33 @@ app.get(
   }
 );
 
+/* ADMIN : BANNIR OU DÉBANNIR UN UTILISATEUR */
+
 app.patch(
   "/api/admin/users/:id/ban",
   requireLogin,
   requireAdmin,
   (req, res) => {
+    const targetUserId = String(req.params.id);
+    const currentUserId = String(req.currentUser.id);
     const isBanned = Boolean(req.body.isBanned);
+
+    /*
+      Protection importante :
+      l'administrateur ne peut jamais se bannir lui-même,
+      même si la requête est envoyée directement au backend.
+    */
+
+    if (targetUserId === currentUserId) {
+      return res.status(403).json({
+        error: "Tu ne peux pas te bannir toi-même."
+      });
+    }
+
     const data = loadData();
 
     const user = data.users.find(
-      (item) => item.id === req.params.id
+      (item) => String(item.id) === targetUserId
     );
 
     if (!user) {
@@ -563,51 +586,28 @@ app.patch(
       });
     }
 
-    if (user.username === ADMIN_USERNAME) {
+    /*
+      Deuxième protection :
+      le compte administrateur principal ne peut jamais être banni.
+    */
+
+    if (
+      user.isAdmin ||
+      user.username === ADMIN_USERNAME
+    ) {
       return res.status(403).json({
         error: "Le compte administrateur ne peut pas être banni."
       });
     }
 
     user.isBanned = isBanned;
+
     saveData(data);
 
     res.json({
-      message: "Utilisateur mis à jour."
-    });
-  }
-);
-
-/* ADMIN : NOTIFICATIONS */
-
-app.post(
-  "/api/admin/notifications",
-  requireLogin,
-  requireAdmin,
-  (req, res) => {
-    const title = cleanText(req.body.title, 100);
-    const content = cleanText(req.body.content, 1000);
-
-    if (!title || !content) {
-      return res.status(400).json({
-        error: "Le titre et le contenu sont obligatoires."
-      });
-    }
-
-    const data = loadData();
-
-    data.notifications.push({
-      id: createId(),
-      title,
-      content,
-      createdAt: new Date().toISOString(),
-      author: req.currentUser.username
-    });
-
-    saveData(data);
-
-    res.status(201).json({
-      message: "Notification publiée."
+      message: isBanned
+        ? "Utilisateur banni."
+        : "Utilisateur débanni."
     });
   }
 );
@@ -615,10 +615,12 @@ app.post(
 /* PAGE PRINCIPALE */
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(
+    path.join(__dirname, "public", "index.html")
+  );
 });
 
-/* DÉMARRAGE RENDER */
+/* DÉMARRAGE */
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`SAN SMP lancé sur le port ${PORT}`);
