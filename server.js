@@ -33,35 +33,83 @@ if (!fs.existsSync(dataFile)) {
 }
 
 function readData() {
-  const data = JSON.parse(fs.readFileSync(dataFile, "utf8"));
+  try {
+    const data = JSON.parse(fs.readFileSync(dataFile, "utf8"));
 
-  data.users ||= [];
-  data.launchRequests ||= [];
-  data.staffApplications ||= [];
-  data.notifications ||= [];
+    data.users = Array.isArray(data.users) ? data.users : [];
+    data.launchRequests = Array.isArray(data.launchRequests)
+      ? data.launchRequests
+      : [];
+    data.staffApplications = Array.isArray(data.staffApplications)
+      ? data.staffApplications
+      : [];
+    data.notifications = Array.isArray(data.notifications)
+      ? data.notifications
+      : [];
 
-  return data;
+    return data;
+  } catch (error) {
+    console.error("Erreur lecture des données :", error);
+
+    return {
+      users: [],
+      launchRequests: [],
+      staffApplications: [],
+      notifications: []
+    };
+  }
 }
 
 function saveData(data) {
-  fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
+  const temporaryFile = `${dataFile}.tmp`;
+
+  fs.writeFileSync(
+    temporaryFile,
+    JSON.stringify(data, null, 2),
+    "utf8"
+  );
+
+  fs.renameSync(temporaryFile, dataFile);
+}
+
+function normalizeUsername(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function cleanUsername(value) {
+  return String(value || "").trim();
+}
+
+function cleanText(value) {
+  return String(value || "").trim();
+}
+
+function isAdminUsername(username) {
+  return normalizeUsername(username) === normalizeUsername(ADMIN_USERNAME);
+}
+
+function updateAdminStatus(user) {
+  user.isAdmin = isAdminUsername(user.username);
+  return user;
 }
 
 function ensureConfiguredAdmin() {
   const data = readData();
+  let changed = false;
 
-  const admin = data.users.find(
-    user =>
-      user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase()
-  );
+  for (const user of data.users) {
+    const previousStatus = Boolean(user.isAdmin);
 
-  if (admin && process.env.ADMIN_PASSWORD && !admin.isAdmin) {
-    admin.isAdmin = true;
+    updateAdminStatus(user);
+
+    if (previousStatus !== user.isAdmin) {
+      changed = true;
+    }
+  }
+
+  if (changed) {
     saveData(data);
-
-    console.log(
-      `Le compte ${ADMIN_USERNAME} est maintenant administrateur.`
-    );
+    console.log("Les droits administrateur ont été corrigés.");
   }
 }
 
@@ -71,7 +119,9 @@ app.set("trust proxy", 1);
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "CHANGE-ME-ON-RENDER",
+    secret:
+      process.env.SESSION_SECRET ||
+      "CHANGE-ME-IMMEDIATELY-ON-RENDER",
     resave: false,
     saveUninitialized: false,
     proxy: true,
@@ -85,18 +135,6 @@ app.use(
 );
 
 app.use(express.static(path.join(__dirname, "public")));
-
-// ====================
-// UTILITAIRES
-// ====================
-
-function cleanUsername(value) {
-  return String(value || "").trim();
-}
-
-function cleanText(value) {
-  return String(value || "").trim();
-}
 
 function requireLogin(req, res, next) {
   if (!req.session.user) {
@@ -120,7 +158,7 @@ function requireAdmin(req, res, next) {
 
 function createNotification(data, userId, title, message, type) {
   data.notifications.unshift({
-    id: Date.now() + Math.random(),
+    id: `${Date.now()}-${Math.random()}`,
     userId,
     title,
     message,
@@ -141,24 +179,26 @@ app.post("/api/register", async (req, res) => {
 
     if (!/^[a-zA-Z0-9_]{3,32}$/.test(username)) {
       return res.status(400).json({
-        error: "Pseudo invalide."
+        error:
+          "Pseudo invalide. Utilise uniquement des lettres, chiffres et _."
       });
     }
 
     if (password.length < 8 || password.length > 100) {
       return res.status(400).json({
-        error: "Le mot de passe doit contenir entre 8 et 100 caractères."
+        error:
+          "Le mot de passe doit contenir entre 8 et 100 caractères."
       });
     }
 
     const data = readData();
+    const normalizedUsername = normalizeUsername(username);
 
-    if (
-      data.users.some(
-        user =>
-          user.username.toLowerCase() === username.toLowerCase()
-      )
-    ) {
+    const existingUser = data.users.find(
+      user => normalizeUsername(user.username) === normalizedUsername
+    );
+
+    if (existingUser) {
       return res.status(409).json({
         error: "Ce pseudo est déjà utilisé."
       });
@@ -166,44 +206,50 @@ app.post("/api/register", async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    const isAdmin =
-      username.toLowerCase() === ADMIN_USERNAME.toLowerCase() &&
-      Boolean(process.env.ADMIN_PASSWORD) &&
-      password === process.env.ADMIN_PASSWORD;
-
     const user = {
-      id: Date.now(),
+      id: `${Date.now()}-${Math.random()}`,
       username,
+      usernameNormalized: normalizedUsername,
       passwordHash,
-      isAdmin,
+      isAdmin: isAdminUsername(username),
       createdAt: new Date().toISOString()
     };
 
     data.users.push(user);
     saveData(data);
 
-    req.session.user = {
-      id: user.id,
-      username: user.username,
-      isAdmin: user.isAdmin
-    };
-
-    req.session.save(error => {
+    req.session.regenerate(error => {
       if (error) {
-        console.error("Erreur sauvegarde session :", error);
+        console.error("Erreur régénération session :", error);
 
         return res.status(500).json({
-          error: "Impossible de sauvegarder la session."
+          error: "Impossible de créer la session."
         });
       }
 
-      res.json({
-        ok: true,
-        user: req.session.user
+      req.session.user = {
+        id: user.id,
+        username: user.username,
+        isAdmin: user.isAdmin
+      };
+
+      req.session.save(sessionError => {
+        if (sessionError) {
+          console.error("Erreur sauvegarde session :", sessionError);
+
+          return res.status(500).json({
+            error: "Impossible de sauvegarder la session."
+          });
+        }
+
+        return res.json({
+          ok: true,
+          user: req.session.user
+        });
       });
     });
   } catch (error) {
-    console.error(error);
+    console.error("Erreur création compte :", error);
 
     res.status(500).json({
       error: "Impossible de créer le compte."
@@ -216,55 +262,78 @@ app.post("/api/login", async (req, res) => {
     const username = cleanUsername(req.body.username);
     const password = String(req.body.password || "");
 
+    if (!username || !password) {
+      return res.status(400).json({
+        error: "Entre ton pseudo et ton mot de passe."
+      });
+    }
+
     const data = readData();
+    const normalizedUsername = normalizeUsername(username);
 
     const user = data.users.find(
       user =>
-        user.username.toLowerCase() === username.toLowerCase()
+        normalizeUsername(user.username) === normalizedUsername ||
+        user.usernameNormalized === normalizedUsername
     );
 
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (!user || !user.passwordHash) {
       return res.status(401).json({
         error: "Pseudo ou mot de passe incorrect."
       });
     }
 
-    if (
-      user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase() &&
-      process.env.ADMIN_PASSWORD &&
-      password === process.env.ADMIN_PASSWORD &&
-      !user.isAdmin
-    ) {
-      user.isAdmin = true;
-      saveData(data);
+    const passwordIsCorrect = await bcrypt.compare(
+      password,
+      user.passwordHash
+    );
 
-      console.log(
-        `Le compte ${user.username} est maintenant administrateur.`
-      );
+    if (!passwordIsCorrect) {
+      return res.status(401).json({
+        error: "Pseudo ou mot de passe incorrect."
+      });
     }
 
-    req.session.user = {
-      id: user.id,
-      username: user.username,
-      isAdmin: Boolean(user.isAdmin)
-    };
+    const oldAdminStatus = Boolean(user.isAdmin);
 
-    req.session.save(error => {
+    updateAdminStatus(user);
+
+    if (oldAdminStatus !== user.isAdmin) {
+      saveData(data);
+    }
+
+    req.session.regenerate(error => {
       if (error) {
-        console.error("Erreur sauvegarde session :", error);
+        console.error("Erreur régénération session :", error);
 
         return res.status(500).json({
-          error: "Impossible de sauvegarder la session."
+          error: "Impossible de créer la session."
         });
       }
 
-      res.json({
-        ok: true,
-        user: req.session.user
+      req.session.user = {
+        id: user.id,
+        username: user.username,
+        isAdmin: user.isAdmin
+      };
+
+      req.session.save(sessionError => {
+        if (sessionError) {
+          console.error("Erreur sauvegarde session :", sessionError);
+
+          return res.status(500).json({
+            error: "Impossible de sauvegarder la session."
+          });
+        }
+
+        return res.json({
+          ok: true,
+          user: req.session.user
+        });
       });
     });
   } catch (error) {
-    console.error(error);
+    console.error("Erreur connexion :", error);
 
     res.status(500).json({
       error: "Impossible de se connecter."
@@ -275,6 +344,8 @@ app.post("/api/login", async (req, res) => {
 app.post("/api/logout", (req, res) => {
   req.session.destroy(error => {
     if (error) {
+      console.error("Erreur déconnexion :", error);
+
       return res.status(500).json({
         error: "Impossible de se déconnecter."
       });
@@ -317,7 +388,7 @@ app.post("/api/launch-requests", requireLogin, (req, res) => {
   const data = readData();
 
   const request = {
-    id: Date.now(),
+    id: `${Date.now()}-${Math.random()}`,
     userId: req.session.user.id,
     pseudo,
     message,
@@ -327,7 +398,7 @@ app.post("/api/launch-requests", requireLogin, (req, res) => {
 
   data.launchRequests.unshift(request);
 
-  const admin = data.users.find(user => user.isAdmin);
+  const admin = data.users.find(user => isAdminUsername(user.username));
 
   if (admin) {
     createNotification(
@@ -374,7 +445,7 @@ app.post("/api/staff-applications", requireLogin, (req, res) => {
   const data = readData();
 
   const application = {
-    id: Date.now(),
+    id: `${Date.now()}-${Math.random()}`,
     userId: req.session.user.id,
     pseudo,
     reason,
@@ -384,7 +455,7 @@ app.post("/api/staff-applications", requireLogin, (req, res) => {
 
   data.staffApplications.unshift(application);
 
-  const admin = data.users.find(user => user.isAdmin);
+  const admin = data.users.find(user => isAdminUsername(user.username));
 
   if (admin) {
     createNotification(
@@ -507,7 +578,8 @@ app.get("/api/notifications", requireLogin, (req, res) => {
   const data = readData();
 
   const notifications = data.notifications.filter(
-    notification => notification.userId === req.session.user.id
+    notification =>
+      String(notification.userId) === String(req.session.user.id)
   );
 
   res.json(notifications);
@@ -519,7 +591,7 @@ app.post("/api/notifications/:id/read", requireLogin, (req, res) => {
   const notification = data.notifications.find(
     item =>
       String(item.id) === String(req.params.id) &&
-      item.userId === req.session.user.id
+      String(item.userId) === String(req.session.user.id)
   );
 
   if (!notification) {
