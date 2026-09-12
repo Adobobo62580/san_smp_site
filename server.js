@@ -87,12 +87,14 @@ function requireLogin(req, res, next) {
   }
 
   const data = loadData();
+
   const user = data.users.find(
     (item) => item.id === req.session.userId
   );
 
   if (!user) {
     req.session.destroy(() => {});
+
     return res.status(401).json({
       error: "Session invalide."
     });
@@ -100,6 +102,7 @@ function requireLogin(req, res, next) {
 
   if (user.isBanned) {
     req.session.destroy(() => {});
+
     return res.status(403).json({
       error: "Ton compte est banni."
     });
@@ -125,7 +128,9 @@ app.get("/api/me", (req, res) => {
   const data = loadData();
 
   if (!req.session.userId) {
-    return res.json({ user: null });
+    return res.json({
+      user: null
+    });
   }
 
   const user = data.users.find(
@@ -133,7 +138,9 @@ app.get("/api/me", (req, res) => {
   );
 
   if (!user || user.isBanned) {
-    return res.json({ user: null });
+    return res.json({
+      user: null
+    });
   }
 
   res.json({
@@ -168,7 +175,8 @@ app.post("/api/register", async (req, res) => {
   const data = loadData();
 
   const existingUser = data.users.find(
-    (user) => user.username.toLowerCase() === username.toLowerCase()
+    (user) =>
+      user.username.toLowerCase() === username.toLowerCase()
   );
 
   if (existingUser) {
@@ -205,7 +213,8 @@ app.post("/api/login", async (req, res) => {
   const data = loadData();
 
   const user = data.users.find(
-    (item) => item.username.toLowerCase() === username.toLowerCase()
+    (item) =>
+      item.username.toLowerCase() === username.toLowerCase()
   );
 
   if (!user) {
@@ -262,7 +271,9 @@ app.get("/api/users", requireLogin, (req, res) => {
     )
     .map(publicUser);
 
-  res.json({ users });
+  res.json({
+    users
+  });
 });
 
 /* MESSAGES */
@@ -338,7 +349,9 @@ app.get("/api/messages/:userId", requireLogin, (req, res) => {
     return conversation || reverseConversation;
   });
 
-  res.json({ messages });
+  res.json({
+    messages
+  });
 });
 
 /* NOTIFICATIONS */
