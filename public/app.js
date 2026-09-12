@@ -20,7 +20,7 @@ const $ = (id) => document.getElementById(id);
 
 function showSection(sectionName) {
   Object.values(sections).forEach((section) => {
-    section.classList.add("hidden");
+    if (section) section.classList.add("hidden");
   });
 
   if (sections[sectionName]) {
@@ -41,6 +41,8 @@ function setMessage(id, message, success = false) {
 
 function showGlobalMessage(message, success = false) {
   const element = $("globalMessage");
+
+  if (!element) return;
 
   element.textContent = message;
   element.className = success
@@ -75,16 +77,16 @@ async function api(url, options = {}) {
 function updateNavigation() {
   const loggedIn = Boolean(state.user);
 
-  $("loginNavBtn").classList.toggle("hidden", loggedIn);
-  $("logoutBtn").classList.toggle("hidden", !loggedIn);
+  $("loginNavBtn")?.classList.toggle("hidden", loggedIn);
+  $("logoutBtn")?.classList.toggle("hidden", !loggedIn);
 
-  $("messagesBtn").classList.toggle("hidden", !loggedIn);
-  $("notificationsBtn").classList.toggle("hidden", !loggedIn);
+  $("messagesBtn")?.classList.toggle("hidden", !loggedIn);
+  $("notificationsBtn")?.classList.toggle("hidden", !loggedIn);
 
   if (state.user?.isAdmin) {
-    $("adminSection").classList.remove("hidden");
+    $("adminSection")?.classList.remove("hidden");
   } else {
-    $("adminSection").classList.add("hidden");
+    $("adminSection")?.classList.add("hidden");
   }
 }
 
@@ -101,6 +103,8 @@ async function loadCurrentUser() {
 
 async function loadNotifications() {
   const list = $("notificationsList");
+
+  if (!list) return;
 
   list.innerHTML = `<p class="muted">Chargement...</p>`;
 
@@ -127,12 +131,15 @@ async function loadNotifications() {
       list.appendChild(article);
     });
   } catch (error) {
-    list.innerHTML = `<p class="message error">${escapeHtml(error.message)}</p>`;
+    list.innerHTML =
+      `<p class="message error">${escapeHtml(error.message)}</p>`;
   }
 }
 
 async function loadUsers() {
   const list = $("usersList");
+
+  if (!list) return;
 
   list.innerHTML = `<p class="muted">Chargement des membres...</p>`;
 
@@ -149,6 +156,7 @@ async function loadUsers() {
 
     state.users.forEach((user) => {
       const button = document.createElement("button");
+      button.type = "button";
       button.className = "user-button";
       button.textContent = user.username;
 
@@ -163,14 +171,17 @@ async function loadUsers() {
       list.appendChild(button);
     });
   } catch (error) {
-    list.innerHTML = `<p class="message error">${escapeHtml(error.message)}</p>`;
+    list.innerHTML =
+      `<p class="message error">${escapeHtml(error.message)}</p>`;
   }
 }
 
 async function selectUser(user) {
   state.selectedUser = user;
 
-  $("chatTitle").textContent = `Conversation avec ${user.username}`;
+  $("chatTitle").textContent =
+    `Conversation avec ${user.username}`;
+
   $("chatMessages").innerHTML =
     `<p class="muted">Chargement des messages...</p>`;
 
@@ -196,6 +207,9 @@ async function loadConversation() {
 
 function renderMessages() {
   const container = $("chatMessages");
+
+  if (!container) return;
+
   container.innerHTML = "";
 
   if (state.messages.length === 0) {
@@ -207,7 +221,8 @@ function renderMessages() {
   state.messages.forEach((message) => {
     const element = document.createElement("div");
 
-    const ownMessage = message.senderId === state.user.id;
+    const ownMessage =
+      message.senderId === state.user?.id;
 
     element.className = ownMessage
       ? "chat-message own-message"
@@ -275,7 +290,12 @@ async function submitLogin(event) {
 
     updateNavigation();
     $("loginForm").reset();
-    setMessage("loginMessage", "Connexion réussie.", true);
+
+    setMessage(
+      "loginMessage",
+      "Connexion réussie.",
+      true
+    );
 
     showSection("home");
 
@@ -331,7 +351,7 @@ async function logout() {
       method: "POST"
     });
   } catch {
-    // Même en cas d'erreur, on nettoie l'état local.
+    // Nettoyage local même si l'API échoue.
   }
 
   state.user = null;
@@ -356,6 +376,7 @@ async function submitLaunchRequest(event) {
     });
 
     $("launchForm").reset();
+
     setMessage(
       "launchMessage",
       "Ta demande a été envoyée.",
@@ -408,6 +429,8 @@ async function loadAdminData() {
 async function loadAdminLaunchRequests() {
   const container = $("adminLaunchRequests");
 
+  if (!container) return;
+
   try {
     const data = await api("/api/admin/launch-requests");
     const requests = data.requests || [];
@@ -415,7 +438,8 @@ async function loadAdminLaunchRequests() {
     container.innerHTML = "";
 
     if (requests.length === 0) {
-      container.innerHTML = `<p class="muted">Aucune demande.</p>`;
+      container.innerHTML =
+        `<p class="muted">Aucune demande.</p>`;
       return;
     }
 
@@ -427,9 +451,15 @@ async function loadAdminLaunchRequests() {
         <h4>${escapeHtml(request.username)}</h4>
         <p>${escapeHtml(request.reason)}</p>
         <small>Statut : ${escapeHtml(request.status)}</small>
+
         <div class="admin-actions">
-          <button data-status="accepted">Accepter</button>
-          <button data-status="rejected">Refuser</button>
+          <button type="button" data-status="accepted">
+            Accepter
+          </button>
+
+          <button type="button" data-status="rejected">
+            Refuser
+          </button>
         </div>
       `;
 
@@ -467,6 +497,8 @@ async function updateLaunchRequest(id, status) {
 async function loadAdminStaffApplications() {
   const container = $("adminStaffApplications");
 
+  if (!container) return;
+
   try {
     const data = await api("/api/admin/staff-applications");
     const applications = data.applications || [];
@@ -474,7 +506,8 @@ async function loadAdminStaffApplications() {
     container.innerHTML = "";
 
     if (applications.length === 0) {
-      container.innerHTML = `<p class="muted">Aucune candidature.</p>`;
+      container.innerHTML =
+        `<p class="muted">Aucune candidature.</p>`;
       return;
     }
 
@@ -485,12 +518,24 @@ async function loadAdminStaffApplications() {
       card.innerHTML = `
         <h4>${escapeHtml(application.username)}</h4>
         <p><strong>Âge :</strong> ${application.age}</p>
-        <p><strong>Expérience :</strong> ${escapeHtml(application.experience)}</p>
-        <p><strong>Motivations :</strong> ${escapeHtml(application.motivation)}</p>
+        <p>
+          <strong>Expérience :</strong>
+          ${escapeHtml(application.experience)}
+        </p>
+        <p>
+          <strong>Motivations :</strong>
+          ${escapeHtml(application.motivation)}
+        </p>
         <small>Statut : ${escapeHtml(application.status)}</small>
+
         <div class="admin-actions">
-          <button data-status="accepted">Accepter</button>
-          <button data-status="rejected">Refuser</button>
+          <button type="button" data-status="accepted">
+            Accepter
+          </button>
+
+          <button type="button" data-status="rejected">
+            Refuser
+          </button>
         </div>
       `;
 
@@ -528,35 +573,64 @@ async function updateStaffApplication(id, status) {
 async function loadAdminUsers() {
   const container = $("adminUsers");
 
+  if (!container) return;
+
   try {
     const data = await api("/api/admin/users");
     const users = data.users || [];
 
     container.innerHTML = "";
 
+    if (users.length === 0) {
+      container.innerHTML =
+        `<p class="muted">Aucun utilisateur.</p>`;
+      return;
+    }
+
     users.forEach((user) => {
       const card = document.createElement("div");
       card.className = "admin-item";
+
+      const isCurrentUser =
+        String(user.id) === String(state.user?.id);
 
       card.innerHTML = `
         <h4>${escapeHtml(user.username)}</h4>
         <p>Admin : ${user.isAdmin ? "Oui" : "Non"}</p>
         <p>Banni : ${user.isBanned ? "Oui" : "Non"}</p>
-        <div class="admin-actions">
-          <button data-ban="true">Bannir</button>
-          <button data-ban="false">Débannir</button>
-        </div>
       `;
 
-      card.querySelectorAll("button").forEach((button) => {
-        button.addEventListener("click", async () => {
-          await updateUserBan(
-            user.id,
-            button.dataset.ban === "true"
-          );
-        });
-      });
+      const actions = document.createElement("div");
+      actions.className = "admin-actions";
 
+      if (isCurrentUser) {
+        const warning = document.createElement("p");
+        warning.className = "muted";
+        warning.textContent =
+          "Tu ne peux pas te bannir toi-même.";
+        actions.appendChild(warning);
+      } else {
+        const banButton = document.createElement("button");
+        banButton.type = "button";
+        banButton.textContent = "Bannir";
+
+        banButton.addEventListener("click", async () => {
+          await updateUserBan(user.id, true);
+        });
+
+        const unbanButton = document.createElement("button");
+        unbanButton.type = "button";
+        unbanButton.textContent = "Débannir";
+
+        unbanButton.addEventListener("click", async () => {
+          await updateUserBan(user.id, false);
+        });
+
+        actions.appendChild(banButton);
+        actions.appendChild(unbanButton);
+      }
+
+      card.appendChild(actions);
       container.appendChild(card);
     });
   } catch (error) {
@@ -566,6 +640,14 @@ async function loadAdminUsers() {
 }
 
 async function updateUserBan(userId, isBanned) {
+  // Protection côté navigateur.
+  if (String(userId) === String(state.user?.id)) {
+    showGlobalMessage(
+      "Action impossible : tu ne peux pas te bannir toi-même."
+    );
+    return;
+  }
+
   try {
     await api(`/api/admin/users/${userId}/ban`, {
       method: "PATCH",
@@ -573,36 +655,15 @@ async function updateUserBan(userId, isBanned) {
     });
 
     await loadAdminUsers();
-    showGlobalMessage("Utilisateur mis à jour.", true);
-  } catch (error) {
-    showGlobalMessage(error.message);
-  }
-}
 
-async function publishNotification(event) {
-  event.preventDefault();
-
-  const title = $("notificationTitle").value.trim();
-  const content = $("notificationContent").value.trim();
-
-  try {
-    await api("/api/admin/notifications", {
-      method: "POST",
-      body: JSON.stringify({
-        title,
-        content
-      })
-    });
-
-    $("notificationForm").reset();
-
-    setMessage(
-      "notificationMessage",
-      "Notification publiée.",
+    showGlobalMessage(
+      isBanned
+        ? "Utilisateur banni."
+        : "Utilisateur débanni.",
       true
     );
   } catch (error) {
-    setMessage("notificationMessage", error.message);
+    showGlobalMessage(error.message);
   }
 }
 
@@ -625,28 +686,29 @@ function escapeHtml(value) {
 }
 
 // Navigation
-$("homeBtn").addEventListener("click", () => {
+$("homeBtn")?.addEventListener("click", () => {
   showSection("home");
 });
 
-$("loginNavBtn").addEventListener("click", () => {
+$("loginNavBtn")?.addEventListener("click", () => {
   showSection("login");
 });
 
-$("messagesBtn").addEventListener("click", async () => {
+$("messagesBtn")?.addEventListener("click", async () => {
   if (!state.user) {
     showSection("login");
     return;
   }
 
   showSection("messages");
-  $("messagesLoginNotice").classList.add("hidden");
-  $("messagesContent").classList.remove("hidden");
+
+  $("messagesLoginNotice")?.classList.add("hidden");
+  $("messagesContent")?.classList.remove("hidden");
 
   await loadUsers();
 });
 
-$("notificationsBtn").addEventListener("click", async () => {
+$("notificationsBtn")?.addEventListener("click", async () => {
   if (!state.user) {
     showSection("login");
     return;
@@ -656,49 +718,54 @@ $("notificationsBtn").addEventListener("click", async () => {
   await loadNotifications();
 });
 
-$("launchBtn").addEventListener("click", () => {
+$("launchBtn")?.addEventListener("click", () => {
   if (!state.user) {
     showSection("login");
-    showGlobalMessage("Connecte-toi pour faire une demande.");
+    showGlobalMessage(
+      "Connecte-toi pour faire une demande."
+    );
     return;
   }
 
   showSection("launch");
 });
 
-$("staffBtn").addEventListener("click", () => {
+$("staffBtn")?.addEventListener("click", () => {
   if (!state.user) {
     showSection("login");
-    showGlobalMessage("Connecte-toi pour envoyer une candidature.");
+    showGlobalMessage(
+      "Connecte-toi pour envoyer une candidature."
+    );
     return;
   }
 
   showSection("staff");
 });
 
-$("logoutBtn").addEventListener("click", logout);
+$("logoutBtn")?.addEventListener("click", logout);
 
-$("showRegisterBtn").addEventListener("click", () => {
+$("showRegisterBtn")?.addEventListener("click", () => {
   showSection("register");
 });
 
-$("showLoginBtn").addEventListener("click", () => {
+$("showLoginBtn")?.addEventListener("click", () => {
   showSection("login");
 });
 
-$("adminSection").addEventListener("click", () => {
+$("adminSection")?.addEventListener("click", () => {
   if (state.user?.isAdmin) {
     loadAdminData();
   }
 });
 
 // Formulaires
-$("loginForm").addEventListener("submit", submitLogin);
-$("registerForm").addEventListener("submit", submitRegister);
-$("messageForm").addEventListener("submit", sendMessage);
-$("launchForm").addEventListener("submit", submitLaunchRequest);
-$("staffForm").addEventListener("submit", submitStaffApplication);
-$("notificationForm").addEventListener("submit", publishNotification);
+$("loginForm")?.addEventListener("submit", submitLogin);
+$("registerForm")?.addEventListener("submit", submitRegister);
+$("messageForm")?.addEventListener("submit", sendMessage);
+$("launchForm")?.addEventListener("submit", submitLaunchRequest);
+$("staffForm")?.addEventListener("submit", submitStaffApplication);
+
+// Le formulaire de notification a été supprimé volontairement.
 
 // Initialisation
 (async function init() {
