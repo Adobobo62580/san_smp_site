@@ -1,218 +1,108 @@
 const express = require("express");
+const session = require("express-session");
+const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
-const bcrypt = require("bcryptjs");
-const session = require("express-session");
+const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const ADMIN_USERNAME = "Adosaurus3614";
+const DATA_FILE = path.join(__dirname, "site-data.json");
 
-const dataDir = path.join(__dirname, "data");
-const dataFile = path.join(dataDir, "site-data.json");
-
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-if (!fs.existsSync(dataFile)) {
-  fs.writeFileSync(
-    dataFile,
-    JSON.stringify(
-      {
-        users: [],
-        launchRequests: [],
-        staffApplications: [],
-        notifications: [],
-        messages: [],
-        staffMembers: [],
-        bans: []
-      },
-      null,
-      2
-    ),
-    "utf8"
-  );
-}
-
-function emptyData() {
-  return {
-    users: [],
-    launchRequests: [],
-    staffApplications: [],
-    notifications: [],
-    messages: [],
-    staffMembers: [],
-    bans: []
-  };
-}
-
-function readData() {
-  try {
-    const data = JSON.parse(fs.readFileSync(dataFile, "utf8"));
-
-    const defaults = emptyData();
-
-    for (const key of Object.keys(defaults)) {
-      if (!Array.isArray(data[key])) {
-        data[key] = [];
-      }
-    }
-
-    return data;
-  } catch (error) {
-    console.error("Erreur lecture des données :", error);
-    return emptyData();
-  }
-}
-
-function saveData(data) {
-  const temporaryFile = `${dataFile}.tmp`;
-
-  fs.writeFileSync(
-    temporaryFile,
-    JSON.stringify(data, null, 2),
-    "utf8"
-  );
-
-  fs.renameSync(temporaryFile, dataFile);
-}
-
-function cleanUsername(value) {
-  return String(value || "").trim();
-}
-
-function normalizeUsername(value) {
-  return cleanUsername(value).toLowerCase();
-}
-
-function cleanText(value) {
-  return String(value || "").trim();
-}
-
-function isAdminUsername(username) {
-  return normalizeUsername(username) === normalizeUsername(ADMIN_USERNAME);
-}
-
-function updateAdminStatus(user) {
-  user.isAdmin = isAdminUsername(user.username);
-  return user;
-}
-
-function getAdmin(data) {
-  return data.users.find(user => isAdminUsername(user.username));
-}
-
-function createId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function createNotification(data, userId, title, message, type = "general") {
-  data.notifications.unshift({
-    id: createId(),
-    userId,
-    title,
-    message,
-    type,
-    isRead: false,
-    createdAt: new Date().toISOString()
-  });
-}
-
-function isUserBanned(data, userId) {
-  const ban = data.bans.find(
-    item =>
-      String(item.userId) === String(userId) &&
-      item.active === true
-  );
-
-  if (!ban) {
-    return null;
-  }
-
-  if (ban.expiresAt) {
-    const expiration = new Date(ban.expiresAt).getTime();
-
-    if (Date.now() >= expiration) {
-      ban.active = false;
-      saveData(data);
-      return null;
-    }
-  }
-
-  return ban;
-}
-
-function ensureConfiguredAdmin() {
-  const data = readData();
-  let changed = false;
-
-  for (const user of data.users) {
-    const oldStatus = Boolean(user.isAdmin);
-
-    updateAdminStatus(user);
-
-    if (oldStatus !== user.isAdmin) {
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    saveData(data);
-  }
-}
-
-app.use(express.json({ limit: "30kb" }));
-
-app.set("trust proxy", 1);
+app.use(express.json());
+app.use(express.static(__dirname));
 
 app.use(
   session({
-    secret:
-      process.env.SESSION_SECRET ||
-      "CHANGE-ME-IMMEDIATELY-ON-RENDER",
+    secret: process.env.SESSION_SECRET || "change-cette-cle-secrete",
     resave: false,
     saveUninitialized: false,
-    proxy: true,
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: false,
       maxAge: 1000 * 60 * 60 * 24 * 7
     }
   })
 );
 
-app.use(express.static(path.join(__dirname, "public")));
+function createId() {
+  return crypto.randomUUID();
+}
 
-// ====================
-// MIDDLEWARES
-// ====================
+function defaultData() {
+  return {
+    users: [],
+    messages: [],
+    notifications: [],
+    launchRequests: [],
+    staffApplications: []
+  };
+}
+
+function loadData() {
+  if (!fs.existsSync(DATA_FILE)) {
+    const data = defaultData();
+    saveData(data);
+    return data;
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  } catch {
+    return defaultData();
+  }
+}
+
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
+
+function isAdminUsername(username) {
+  return username === ADMIN_USERNAME;
+}
+
+function publicUser(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    isAdmin: user.isAdmin,
+    isBanned: user.isBanned
+  };
+}
 
 function requireLogin(req, res, next) {
-  if (!req.session.user) {
+  if (!req.session.userId) {
     return res.status(401).json({
       error: "Tu dois être connecté."
     });
   }
 
-  const data = readData();
-  const ban = isUserBanned(data, req.session.user.id);
+  const data = loadData();
+  const user = data.users.find((item) => item.id === req.session.userId);
 
-  if (ban) {
+  if (!user) {
     req.session.destroy(() => {});
-
-    return res.status(403).json({
-      error: `Ton compte est banni. Raison : ${ban.reason || "Aucune raison indiquée."}`
+    return res.status(401).json({
+      error: "Session invalide."
     });
   }
 
+  if (user.isBanned) {
+    req.session.destroy(() => {});
+    return res.status(403).json({
+      error: "Ton compte est banni."
+    });
+  }
+
+  req.currentUser = user;
   next();
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.session.user || !req.session.user.isAdmin) {
+  if (!req.currentUser?.isAdmin) {
     return res.status(403).json({
       error: "Accès réservé à l'administrateur."
     });
@@ -221,691 +111,175 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-function requireStaffOrAdmin(req, res, next) {
-  if (!req.session.user) {
-    return res.status(401).json({
-      error: "Tu dois être connecté."
-    });
-  }
-
-  const data = readData();
-
-  if (req.session.user.isAdmin) {
-    return next();
-  }
-
-  const isStaff = data.staffMembers.some(
-    member =>
-      String(member.userId) === String(req.session.user.id) &&
-      member.active === true
-  );
-
-  if (!isStaff) {
-    return res.status(403).json({
-      error: "Accès réservé au Staff."
-    });
-  }
-
-  next();
+function cleanText(value, maxLength) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxLength);
 }
 
-// ====================
-// COMPTES
-// ====================
-
-app.post("/api/register", async (req, res) => {
-  try {
-    const username = cleanUsername(req.body.username);
-    const password = String(req.body.password || "");
-
-    if (!/^[a-zA-Z0-9_]{3,32}$/.test(username)) {
-      return res.status(400).json({
-        error:
-          "Pseudo invalide. Utilise uniquement des lettres, chiffres et _."
-      });
-    }
-
-    if (password.length < 8 || password.length > 100) {
-      return res.status(400).json({
-        error:
-          "Le mot de passe doit contenir entre 8 et 100 caractères."
-      });
-    }
-
-    const data = readData();
-    const usernameNormalized = normalizeUsername(username);
-
-    const existingUser = data.users.find(
-      user =>
-        normalizeUsername(user.username) === usernameNormalized
-    );
-
-    if (existingUser) {
-      return res.status(409).json({
-        error: "Ce pseudo est déjà utilisé."
-      });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 12);
-
-    const user = {
-      id: createId(),
-      username,
-      usernameNormalized,
-      passwordHash,
-      isAdmin: isAdminUsername(username),
-      createdAt: new Date().toISOString()
-    };
-
-    data.users.push(user);
-    saveData(data);
-
-    req.session.regenerate(error => {
-      if (error) {
-        console.error(error);
-
-        return res.status(500).json({
-          error: "Impossible de créer la session."
-        });
-      }
-
-      req.session.user = {
-        id: user.id,
-        username: user.username,
-        isAdmin: user.isAdmin
-      };
-
-      req.session.save(sessionError => {
-        if (sessionError) {
-          console.error(sessionError);
-
-          return res.status(500).json({
-            error: "Impossible de sauvegarder la session."
-          });
-        }
-
-        res.json({
-          ok: true,
-          user: req.session.user
-        });
-      });
-    });
-  } catch (error) {
-    console.error("Erreur création compte :", error);
-
-    res.status(500).json({
-      error: "Impossible de créer le compte."
-    });
-  }
-});
-
-app.post("/api/login", async (req, res) => {
-  try {
-    const username = cleanUsername(req.body.username);
-    const password = String(req.body.password || "");
-
-    if (!username || !password) {
-      return res.status(400).json({
-        error: "Entre ton pseudo et ton mot de passe."
-      });
-    }
-
-    const data = readData();
-    const usernameNormalized = normalizeUsername(username);
-
-    const user = data.users.find(
-      item =>
-        normalizeUsername(item.username) === usernameNormalized ||
-        item.usernameNormalized === usernameNormalized
-    );
-
-    if (!user || !user.passwordHash) {
-      return res.status(401).json({
-        error: "Pseudo ou mot de passe incorrect."
-      });
-    }
-
-    const ban = isUserBanned(data, user.id);
-
-    if (ban) {
-      return res.status(403).json({
-        error: `Compte banni. Raison : ${ban.reason || "Aucune raison indiquée."}`
-      });
-    }
-
-    const passwordIsCorrect = await bcrypt.compare(
-      password,
-      user.passwordHash
-    );
-
-    if (!passwordIsCorrect) {
-      return res.status(401).json({
-        error: "Pseudo ou mot de passe incorrect."
-      });
-    }
-
-    const oldAdminStatus = Boolean(user.isAdmin);
-
-    updateAdminStatus(user);
-
-    if (oldAdminStatus !== user.isAdmin) {
-      saveData(data);
-    }
-
-    req.session.regenerate(error => {
-      if (error) {
-        return res.status(500).json({
-          error: "Impossible de créer la session."
-        });
-      }
-
-      req.session.user = {
-        id: user.id,
-        username: user.username,
-        isAdmin: user.isAdmin
-      };
-
-      req.session.save(sessionError => {
-        if (sessionError) {
-          return res.status(500).json({
-            error: "Impossible de sauvegarder la session."
-          });
-        }
-
-        res.json({
-          ok: true,
-          user: req.session.user
-        });
-      });
-    });
-  } catch (error) {
-    console.error("Erreur connexion :", error);
-
-    res.status(500).json({
-      error: "Impossible de se connecter."
-    });
-  }
-});
-
-app.post("/api/logout", (req, res) => {
-  req.session.destroy(error => {
-    if (error) {
-      return res.status(500).json({
-        error: "Impossible de se déconnecter."
-      });
-    }
-
-    res.clearCookie("connect.sid");
-
-    res.json({
-      ok: true
-    });
-  });
-});
+/* UTILISATEUR CONNECTÉ */
 
 app.get("/api/me", (req, res) => {
+  const data = loadData();
+
+  if (!req.session.userId) {
+    return res.json({ user: null });
+  }
+
+  const user = data.users.find(
+    (item) => item.id === req.session.userId
+  );
+
+  if (!user || user.isBanned) {
+    return res.json({ user: null });
+  }
+
   res.json({
-    user: req.session.user || null
+    user: publicUser(user)
   });
 });
 
-// ====================
-// DEMANDES DE LANCEMENT
-// ====================
+/* INSCRIPTION */
 
-app.get("/api/launch-requests", requireAdmin, (req, res) => {
-  const data = readData();
+app.post("/api/register", async (req, res) => {
+  const username = cleanText(req.body.username, 24);
+  const password = req.body.password;
 
-  res.json(data.launchRequests);
-});
-
-app.post("/api/launch-requests", requireLogin, (req, res) => {
-  const pseudo = cleanUsername(req.body.pseudo);
-  const message = cleanText(req.body.message);
-
-  if (!pseudo || pseudo.length > 32 || message.length > 300) {
+  if (username.length < 3) {
     return res.status(400).json({
-      error: "Informations invalides."
+      error: "Le pseudo doit contenir au moins 3 caractères."
     });
   }
 
-  const data = readData();
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    return res.status(400).json({
+      error: "Le pseudo ne peut contenir que des lettres, chiffres et _."
+    });
+  }
 
-  const request = {
+  if (typeof password !== "string" || password.length < 6) {
+    return res.status(400).json({
+      error: "Le mot de passe doit contenir au moins 6 caractères."
+    });
+  }
+
+  const data = loadData();
+
+  const existingUser = data.users.find(
+    (user) => user.username === username
+  );
+
+  if (existingUser) {
+    return res.status(409).json({
+      error: "Ce pseudo est déjà utilisé."
+    });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  const user = {
     id: createId(),
-    userId: req.session.user.id,
-    pseudo,
-    message,
-    status: "pending",
+    username,
+    passwordHash,
+    isAdmin: isAdminUsername(username),
+    isBanned: false,
     createdAt: new Date().toISOString()
   };
 
-  data.launchRequests.unshift(request);
-
-  const admin = getAdmin(data);
-
-  if (admin) {
-    createNotification(
-      data,
-      admin.id,
-      "Nouvelle demande de lancement",
-      `${pseudo} demande de lancer le serveur.`,
-      "launch"
-    );
-  }
-
+  data.users.push(user);
   saveData(data);
 
-  res.json({
-    ok: true
+  res.status(201).json({
+    message: "Compte créé avec succès."
   });
 });
 
-app.post(
-  "/api/admin/launch-requests/:id/status",
-  requireAdmin,
-  (req, res) => {
-    const data = readData();
+/* CONNEXION */
 
-    const request = data.launchRequests.find(
-      item => String(item.id) === String(req.params.id)
-    );
+app.post("/api/login", async (req, res) => {
+  const username = cleanText(req.body.username, 24);
+  const password = req.body.password;
 
-    if (!request) {
-      return res.status(404).json({
-        error: "Demande introuvable."
-      });
-    }
+  const data = loadData();
 
-    const status = req.body.status;
+  const user = data.users.find(
+    (item) => item.username === username
+  );
 
-    if (!["accepted", "rejected"].includes(status)) {
-      return res.status(400).json({
-        error: "Statut invalide."
-      });
-    }
-
-    request.status = status;
-
-    createNotification(
-      data,
-      request.userId,
-      status === "accepted"
-        ? "Demande de lancement acceptée"
-        : "Demande de lancement refusée",
-      status === "accepted"
-        ? "Ta demande de lancement a été acceptée."
-        : "Ta demande de lancement a été refusée.",
-      "launch"
-    );
-
-    saveData(data);
-
-    res.json({
-      ok: true
-    });
-  }
-);
-
-// ====================
-// CANDIDATURES STAFF
-// ====================
-
-app.get("/api/staff-applications", requireAdmin, (req, res) => {
-  const data = readData();
-
-  res.json(data.staffApplications);
-});
-
-app.post("/api/staff-applications", requireLogin, (req, res) => {
-  const pseudo = cleanUsername(req.body.pseudo);
-  const reason = cleanText(req.body.reason);
-
-  if (
-    !pseudo ||
-    !reason ||
-    pseudo.length > 32 ||
-    reason.length > 1000
-  ) {
-    return res.status(400).json({
-      error: "Remplis tous les champs correctement."
+  if (!user) {
+    return res.status(401).json({
+      error: "Pseudo ou mot de passe incorrect."
     });
   }
 
-  const data = readData();
-
-  const application = {
-    id: createId(),
-    userId: req.session.user.id,
-    pseudo,
-    reason,
-    status: "pending",
-    createdAt: new Date().toISOString()
-  };
-
-  data.staffApplications.unshift(application);
-
-  const admin = getAdmin(data);
-
-  if (admin) {
-    createNotification(
-      data,
-      admin.id,
-      "Nouvelle candidature Staff",
-      `${pseudo} a envoyé une candidature Staff.`,
-      "staff"
-    );
+  if (user.isBanned) {
+    return res.status(403).json({
+      error: "Ton compte est banni."
+    });
   }
 
-  saveData(data);
+  const passwordCorrect = await bcrypt.compare(
+    password,
+    user.passwordHash
+  );
+
+  if (!passwordCorrect) {
+    return res.status(401).json({
+      error: "Pseudo ou mot de passe incorrect."
+    });
+  }
+
+  req.session.userId = user.id;
 
   res.json({
-    ok: true
+    message: "Connexion réussie.",
+    user: publicUser(user)
   });
 });
 
-// Accepter ou refuser une candidature
-app.post(
-  "/api/admin/staff-applications/:id/status",
-  requireAdmin,
-  (req, res) => {
-    const data = readData();
+/* DÉCONNEXION */
 
-    const application = data.staffApplications.find(
-      item => String(item.id) === String(req.params.id)
-    );
-
-    if (!application) {
-      return res.status(404).json({
-        error: "Candidature introuvable."
-      });
-    }
-
-    const status = req.body.status;
-
-    if (!["accepted", "rejected"].includes(status)) {
-      return res.status(400).json({
-        error: "Statut invalide."
-      });
-    }
-
-    application.status = status;
-    application.updatedAt = new Date().toISOString();
-
-    if (status === "accepted") {
-      const alreadyStaff = data.staffMembers.find(
-        member =>
-          String(member.userId) === String(application.userId) &&
-          member.active === true
-      );
-
-      if (!alreadyStaff) {
-        data.staffMembers.push({
-          id: createId(),
-          userId: application.userId,
-          username: application.pseudo,
-          applicationId: application.id,
-          active: true,
-          acceptedAt: new Date().toISOString()
-        });
-      }
-
-      createNotification(
-        data,
-        application.userId,
-        "Candidature Staff acceptée",
-        "Félicitations ! Ta candidature Staff a été acceptée.",
-        "staff"
-      );
-    }
-
-    if (status === "rejected") {
-      data.staffMembers = data.staffMembers.filter(
-        member =>
-          String(member.userId) !== String(application.userId)
-      );
-
-      createNotification(
-        data,
-        application.userId,
-        "Candidature Staff refusée",
-        "Ta candidature Staff a été refusée.",
-        "staff"
-      );
-    }
-
-    saveData(data);
-
+app.post("/api/logout", (req, res) => {
+  req.session.destroy(() => {
     res.json({
-      ok: true,
-      status
+      message: "Déconnexion réussie."
     });
-  }
-);
-
-// ====================
-// MON STAFF
-// ====================
-
-app.get("/api/admin/staff-members", requireAdmin, (req, res) => {
-  const data = readData();
-
-  const staff = data.staffMembers
-    .filter(member => member.active === true)
-    .map(member => {
-      const user = data.users.find(
-        item => String(item.id) === String(member.userId)
-      );
-
-      return {
-        ...member,
-        username: user ? user.username : member.username,
-        userExists: Boolean(user)
-      };
-    });
-
-  res.json(staff);
-});
-
-app.post(
-  "/api/admin/staff-members/:userId/remove",
-  requireAdmin,
-  (req, res) => {
-    const data = readData();
-
-    const member = data.staffMembers.find(
-      item =>
-        String(item.userId) === String(req.params.userId) &&
-        item.active === true
-    );
-
-    if (!member) {
-      return res.status(404).json({
-        error: "Membre Staff introuvable."
-      });
-    }
-
-    member.active = false;
-    member.removedAt = new Date().toISOString();
-
-    createNotification(
-      data,
-      member.userId,
-      "Retrait du Staff",
-      "Tu as été retiré du Staff.",
-      "staff"
-    );
-
-    saveData(data);
-
-    res.json({
-      ok: true
-    });
-  }
-);
-
-// ====================
-// MESSAGERIE
-// ====================
-
-// Voir les conversations accessibles
-app.get("/api/messages/conversations", requireLogin, (req, res) => {
-  const data = readData();
-  const currentUser = req.session.user;
-
-  let allowedUserIds = [];
-
-  if (currentUser.isAdmin) {
-    allowedUserIds = data.staffMembers
-      .filter(member => member.active === true)
-      .map(member => String(member.userId));
-  } else {
-    const isStaff = data.staffMembers.some(
-      member =>
-        String(member.userId) === String(currentUser.id) &&
-        member.active === true
-    );
-
-    if (!isStaff) {
-      return res.status(403).json({
-        error: "Tu ne fais pas partie du Staff."
-      });
-    }
-
-    const admin = getAdmin(data);
-
-    if (admin) {
-      allowedUserIds.push(String(admin.id));
-    }
-  }
-
-  const conversations = allowedUserIds.map(userId => {
-    const user = data.users.find(
-      item => String(item.id) === String(userId)
-    );
-
-    const messages = data.messages
-      .filter(
-        message =>
-          (String(message.senderId) === String(currentUser.id) &&
-            String(message.receiverId) === String(userId)) ||
-          (String(message.senderId) === String(userId) &&
-            String(message.receiverId) === String(currentUser.id))
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() -
-          new Date(a.createdAt).getTime()
-      );
-
-    return {
-      userId,
-      username: user ? user.username : "Utilisateur inconnu",
-      lastMessage: messages[0] || null,
-      unreadCount: messages.filter(
-        message =>
-          String(message.receiverId) === String(currentUser.id) &&
-          message.isRead === false
-      ).length
-    };
   });
-
-  res.json(conversations);
 });
 
-// Voir les messages avec un utilisateur
-app.get(
-  "/api/messages/:userId",
-  requireLogin,
-  (req, res) => {
-    const data = readData();
-    const currentUser = req.session.user;
-    const targetUserId = String(req.params.userId);
+/* LISTE DES MEMBRES */
 
-    const targetUser = data.users.find(
-      user => String(user.id) === targetUserId
-    );
+app.get("/api/users", requireLogin, (req, res) => {
+  const data = loadData();
 
-    if (!targetUser) {
-      return res.status(404).json({
-        error: "Utilisateur introuvable."
-      });
-    }
+  const users = data.users
+    .filter(
+      (user) =>
+        user.id !== req.currentUser.id &&
+        !user.isBanned
+    )
+    .map(publicUser);
 
-    const isAdmin = currentUser.isAdmin;
+  res.json({ users });
+});
 
-    const isStaff = data.staffMembers.some(
-      member =>
-        String(member.userId) === String(currentUser.id) &&
-        member.active === true
-    );
+/* ENVOYER UN MESSAGE */
 
-    const targetIsStaff = data.staffMembers.some(
-      member =>
-        String(member.userId) === targetUserId &&
-        member.active === true
-    );
-
-    const allowed =
-      (isAdmin && targetIsStaff) ||
-      (isStaff && targetUserId === String(getAdmin(data)?.id));
-
-    if (!allowed) {
-      return res.status(403).json({
-        error: "Tu ne peux pas accéder à cette conversation."
-      });
-    }
-
-    const messages = data.messages
-      .filter(
-        message =>
-          (String(message.senderId) === String(currentUser.id) &&
-            String(message.receiverId) === targetUserId) ||
-          (String(message.senderId) === targetUserId &&
-            String(message.receiverId) === String(currentUser.id))
-      )
-      .sort(
-        (a, b) =>
-          new Date(a.createdAt).getTime() -
-          new Date(b.createdAt).getTime()
-      );
-
-    for (const message of messages) {
-      if (
-        String(message.receiverId) === String(currentUser.id)
-      ) {
-        message.isRead = true;
-      }
-    }
-
-    saveData(data);
-
-    res.json({
-      user: {
-        id: targetUser.id,
-        username: targetUser.username
-      },
-      messages
-    });
-  }
-);
-
-// Envoyer un message
 app.post("/api/messages", requireLogin, (req, res) => {
-  const data = readData();
-  const currentUser = req.session.user;
+  const receiverId = cleanText(req.body.receiverId, 100);
+  const content = cleanText(req.body.content, 500);
 
-  const receiverId = String(req.body.receiverId || "");
-  const content = cleanText(req.body.content);
-
-  if (!receiverId || !content || content.length > 2000) {
+  if (!receiverId || !content) {
     return res.status(400).json({
-      error: "Message invalide."
+      error: "Le destinataire et le message sont obligatoires."
     });
   }
+
+  const data = loadData();
 
   const receiver = data.users.find(
-    user => String(user.id) === receiverId
+    (user) =>
+      user.id === receiverId &&
+      !user.isBanned
   );
 
   if (!receiver) {
@@ -914,256 +288,326 @@ app.post("/api/messages", requireLogin, (req, res) => {
     });
   }
 
-  const senderIsAdmin = currentUser.isAdmin;
-
-  const senderIsStaff = data.staffMembers.some(
-    member =>
-      String(member.userId) === String(currentUser.id) &&
-      member.active === true
-  );
-
-  const receiverIsStaff = data.staffMembers.some(
-    member =>
-      String(member.userId) === receiverId &&
-      member.active === true
-  );
-
-  const allowed =
-    (senderIsAdmin && receiverIsStaff) ||
-    (senderIsStaff && isAdminUsername(receiver.username));
-
-  if (!allowed) {
-    return res.status(403).json({
-      error: "Tu ne peux pas envoyer de message à cet utilisateur."
-    });
-  }
-
   const message = {
     id: createId(),
-    senderId: currentUser.id,
-    senderUsername: currentUser.username,
-    receiverId,
+    senderId: req.currentUser.id,
+    senderUsername: req.currentUser.username,
+    receiverId: receiver.id,
     receiverUsername: receiver.username,
     content,
-    isRead: false,
     createdAt: new Date().toISOString()
   };
 
   data.messages.push(message);
-
-  createNotification(
-    data,
-    receiverId,
-    "Nouveau message",
-    `${currentUser.username} t'a envoyé un message.`,
-    "message"
-  );
-
   saveData(data);
 
-  res.json({
-    ok: true,
-    message
+  res.status(201).json({
+    message: "Message envoyé.",
+    sentMessage: message
   });
 });
 
-// ====================
-// BANNISSEMENTS
-// ====================
+/* RÉCUPÉRER UNE CONVERSATION */
 
-// Voir les bannissements
-app.get("/api/admin/bans", requireAdmin, (req, res) => {
-  const data = readData();
+app.get("/api/messages/:userId", requireLogin, (req, res) => {
+  const otherUserId = req.params.userId;
+  const data = loadData();
 
-  const bans = data.bans.map(ban => {
-    const user = data.users.find(
-      item => String(item.id) === String(ban.userId)
-    );
-
-    return {
-      ...ban,
-      username: user ? user.username : "Utilisateur supprimé"
-    };
-  });
-
-  res.json(bans);
-});
-
-// Bannir un compte
-app.post("/api/admin/bans", requireAdmin, (req, res) => {
-  const data = readData();
-
-  const userId = String(req.body.userId || "");
-  const reason = cleanText(req.body.reason);
-  const duration = String(req.body.duration || "permanent");
-
-  const user = data.users.find(
-    item => String(item.id) === userId
+  const otherUser = data.users.find(
+    (user) =>
+      user.id === otherUserId &&
+      !user.isBanned
   );
 
-  if (!user) {
+  if (!otherUser) {
     return res.status(404).json({
       error: "Utilisateur introuvable."
     });
   }
 
-  if (isAdminUsername(user.username)) {
+  const messages = data.messages.filter((message) => {
+    const conversation =
+      message.senderId === req.currentUser.id &&
+      message.receiverId === otherUserId;
+
+    const reverseConversation =
+      message.senderId === otherUserId &&
+      message.receiverId === req.currentUser.id;
+
+    return conversation || reverseConversation;
+  });
+
+  res.json({ messages });
+});
+
+/* NOTIFICATIONS */
+
+app.get("/api/notifications", requireLogin, (req, res) => {
+  const data = loadData();
+
+  const notifications = [...data.notifications].reverse();
+
+  res.json({ notifications });
+});
+
+/* DEMANDE DE LANCEMENT */
+
+app.post("/api/launch-requests", requireLogin, (req, res) => {
+  const reason = cleanText(req.body.reason, 1000);
+
+  if (!reason) {
     return res.status(400).json({
-      error: "Tu ne peux pas bannir le compte administrateur."
+      error: "Explique pourquoi tu demandes le lancement."
     });
   }
 
-  if (!["permanent", "1h", "1d", "7d", "30d"].includes(duration)) {
-    return res.status(400).json({
-      error: "Durée de bannissement invalide."
-    });
-  }
+  const data = loadData();
 
-  const existingBan = data.bans.find(
-    ban =>
-      String(ban.userId) === userId &&
-      ban.active === true
-  );
-
-  if (existingBan) {
-    return res.status(409).json({
-      error: "Ce compte est déjà banni."
-    });
-  }
-
-  let expiresAt = null;
-
-  const durations = {
-    "1h": 60 * 60 * 1000,
-    "1d": 24 * 60 * 60 * 1000,
-    "7d": 7 * 24 * 60 * 60 * 1000,
-    "30d": 30 * 24 * 60 * 60 * 1000
-  };
-
-  if (duration !== "permanent") {
-    expiresAt = new Date(
-      Date.now() + durations[duration]
-    ).toISOString();
-  }
-
-  const ban = {
+  const request = {
     id: createId(),
-    userId,
-    reason: reason || "Aucune raison indiquée.",
-    duration,
-    expiresAt,
-    active: true,
-    createdAt: new Date().toISOString(),
-    bannedBy: req.session.user.username
+    userId: req.currentUser.id,
+    username: req.currentUser.username,
+    reason,
+    status: "pending",
+    createdAt: new Date().toISOString()
   };
 
-  data.bans.push(ban);
-
-  createNotification(
-    data,
-    userId,
-    "Compte banni",
-    `Ton compte a été banni. Raison : ${ban.reason}`,
-    "ban"
-  );
-
+  data.launchRequests.push(request);
   saveData(data);
 
-  res.json({
-    ok: true,
-    ban
+  res.status(201).json({
+    message: "Demande envoyée."
   });
 });
 
-// Débannir un compte
-app.post(
-  "/api/admin/bans/:userId/unban",
-  requireAdmin,
-  (req, res) => {
-    const data = readData();
+/* CANDIDATURE STAFF */
 
-    const ban = data.bans.find(
-      item =>
-        String(item.userId) === String(req.params.userId) &&
-        item.active === true
-    );
+app.post("/api/staff-applications", requireLogin, (req, res) => {
+  const age = Number(req.body.age);
+  const experience = cleanText(req.body.experience, 1500);
+  const motivation = cleanText(req.body.motivation, 1500);
 
-    if (!ban) {
-      return res.status(404).json({
-        error: "Bannissement introuvable."
-      });
-    }
-
-    ban.active = false;
-    ban.unbannedAt = new Date().toISOString();
-
-    createNotification(
-      data,
-      ban.userId,
-      "Compte débanni",
-      "Ton compte a été débanni. Tu peux maintenant te reconnecter.",
-      "ban"
-    );
-
-    saveData(data);
-
-    res.json({
-      ok: true
+  if (!Number.isInteger(age) || age < 13 || age > 100) {
+    return res.status(400).json({
+      error: "Âge invalide."
     });
   }
-);
 
-// ====================
-// NOTIFICATIONS
-// ====================
+  if (!experience || !motivation) {
+    return res.status(400).json({
+      error: "Tous les champs sont obligatoires."
+    });
+  }
 
-app.get("/api/notifications", requireLogin, (req, res) => {
-  const data = readData();
+  const data = loadData();
 
-  const notifications = data.notifications.filter(
-    notification =>
-      String(notification.userId) ===
-      String(req.session.user.id)
-  );
+  const application = {
+    id: createId(),
+    userId: req.currentUser.id,
+    username: req.currentUser.username,
+    age,
+    experience,
+    motivation,
+    status: "pending",
+    createdAt: new Date().toISOString()
+  };
 
-  res.json(notifications);
+  data.staffApplications.push(application);
+  saveData(data);
+
+  res.status(201).json({
+    message: "Candidature envoyée."
+  });
 });
 
-app.post(
-  "/api/notifications/:id/read",
+/* ADMIN : DEMANDES DE LANCEMENT */
+
+app.get(
+  "/api/admin/launch-requests",
   requireLogin,
+  requireAdmin,
   (req, res) => {
-    const data = readData();
-
-    const notification = data.notifications.find(
-      item =>
-        String(item.id) === String(req.params.id) &&
-        String(item.userId) ===
-          String(req.session.user.id)
-    );
-
-    if (!notification) {
-      return res.status(404).json({
-        error: "Notification introuvable."
-      });
-    }
-
-    notification.isRead = true;
-
-    saveData(data);
+    const data = loadData();
 
     res.json({
-      ok: true
+      requests: [...data.launchRequests].reverse()
     });
   }
 );
 
-// ====================
-// DÉMARRAGE
-// ====================
+app.patch(
+  "/api/admin/launch-requests/:id",
+  requireLogin,
+  requireAdmin,
+  (req, res) => {
+    const status = req.body.status;
 
-ensureConfiguredAdmin();
+    if (!["accepted", "rejected", "pending"].includes(status)) {
+      return res.status(400).json({
+        error: "Statut invalide."
+      });
+    }
+
+    const data = loadData();
+
+    const request = data.launchRequests.find(
+      (item) => item.id === req.params.id
+    );
+
+    if (!request) {
+      return res.status(404).json({
+        error: "Demande introuvable."
+      });
+    }
+
+    request.status = status;
+    saveData(data);
+
+    res.json({
+      message: "Demande mise à jour."
+    });
+  }
+);
+
+/* ADMIN : CANDIDATURES STAFF */
+
+app.get(
+  "/api/admin/staff-applications",
+  requireLogin,
+  requireAdmin,
+  (req, res) => {
+    const data = loadData();
+
+    res.json({
+      applications: [...data.staffApplications].reverse()
+    });
+  }
+);
+
+app.patch(
+  "/api/admin/staff-applications/:id",
+  requireLogin,
+  requireAdmin,
+  (req, res) => {
+    const status = req.body.status;
+
+    if (!["accepted", "rejected", "pending"].includes(status)) {
+      return res.status(400).json({
+        error: "Statut invalide."
+      });
+    }
+
+    const data = loadData();
+
+    const application = data.staffApplications.find(
+      (item) => item.id === req.params.id
+    );
+
+    if (!application) {
+      return res.status(404).json({
+        error: "Candidature introuvable."
+      });
+    }
+
+    application.status = status;
+    saveData(data);
+
+    res.json({
+      message: "Candidature mise à jour."
+    });
+  }
+);
+
+/* ADMIN : UTILISATEURS */
+
+app.get(
+  "/api/admin/users",
+  requireLogin,
+  requireAdmin,
+  (req, res) => {
+    const data = loadData();
+
+    res.json({
+      users: data.users.map(publicUser)
+    });
+  }
+);
+
+app.patch(
+  "/api/admin/users/:id/ban",
+  requireLogin,
+  requireAdmin,
+  (req, res) => {
+    const isBanned = Boolean(req.body.isBanned);
+
+    const data = loadData();
+
+    const user = data.users.find(
+      (item) => item.id === req.params.id
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        error: "Utilisateur introuvable."
+      });
+    }
+
+    if (user.username === ADMIN_USERNAME) {
+      return res.status(403).json({
+        error: "Le compte administrateur ne peut pas être banni."
+      });
+    }
+
+    user.isBanned = isBanned;
+    saveData(data);
+
+    res.json({
+      message: "Utilisateur mis à jour."
+    });
+  }
+);
+
+/* ADMIN : NOTIFICATIONS */
+
+app.post(
+  "/api/admin/notifications",
+  requireLogin,
+  requireAdmin,
+  (req, res) => {
+    const title = cleanText(req.body.title, 100);
+    const content = cleanText(req.body.content, 1000);
+
+    if (!title || !content) {
+      return res.status(400).json({
+        error: "Le titre et le contenu sont obligatoires."
+      });
+    }
+
+    const data = loadData();
+
+    const notification = {
+      id: createId(),
+      title,
+      content,
+      createdAt: new Date().toISOString(),
+      author: req.currentUser.username
+    };
+
+    data.notifications.push(notification);
+    saveData(data);
+
+    res.status(201).json({
+      message: "Notification publiée."
+    });
+  }
+);
+
+/* PAGE PRINCIPALE */
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
 
 app.listen(PORT, () => {
-  console.log(`SAN SMP lancé sur le port ${PORT}`);
+  console.log(`SAN SMP lancé sur http://localhost:${PORT}`);
 });
