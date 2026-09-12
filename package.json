@@ -1,14 +1,20 @@
-{
-  "name": "san-smp",
-  "version": "1.0.0",
-  "description": "Site officiel SAN SMP",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "express": "^4.21.2",
-    "express-session": "^1.18.1"
-  }
-}
+# SAN SMP
+
+Site officiel de SAN SMP.
+
+## Fichiers
+
+- `index.html` : page principale
+- `style.css` : design du site
+- `app.js` : fonctionnalités du site
+- `server.js` : serveur et API
+- `site-data.json` : données du site
+- `package.json` : dépendances du projet
+
+## Lancement
+
+Si Node.js est utilisé :
+
+```bash
+npm install
+npm start
