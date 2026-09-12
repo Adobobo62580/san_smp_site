@@ -12,6 +12,7 @@ const ADMIN_USERNAME = "Adosaurus3614";
 const DATA_FILE = path.join(__dirname, "site-data.json");
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
 
 app.use(
@@ -42,6 +43,10 @@ function defaultData() {
   };
 }
 
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
+
 function loadData() {
   if (!fs.existsSync(DATA_FILE)) {
     const data = defaultData();
@@ -56,8 +61,9 @@ function loadData() {
   }
 }
 
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+function cleanText(value, maxLength) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxLength);
 }
 
 function isAdminUsername(username) {
@@ -81,7 +87,9 @@ function requireLogin(req, res, next) {
   }
 
   const data = loadData();
-  const user = data.users.find((item) => item.id === req.session.userId);
+  const user = data.users.find(
+    (item) => item.id === req.session.userId
+  );
 
   if (!user) {
     req.session.destroy(() => {});
@@ -102,18 +110,13 @@ function requireLogin(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.currentUser?.isAdmin) {
+  if (!req.currentUser || !req.currentUser.isAdmin) {
     return res.status(403).json({
       error: "Accès réservé à l'administrateur."
     });
   }
 
   next();
-}
-
-function cleanText(value, maxLength) {
-  if (typeof value !== "string") return "";
-  return value.trim().slice(0, maxLength);
 }
 
 /* UTILISATEUR CONNECTÉ */
@@ -165,7 +168,7 @@ app.post("/api/register", async (req, res) => {
   const data = loadData();
 
   const existingUser = data.users.find(
-    (user) => user.username === username
+    (user) => user.username.toLowerCase() === username.toLowerCase()
   );
 
   if (existingUser) {
@@ -202,7 +205,7 @@ app.post("/api/login", async (req, res) => {
   const data = loadData();
 
   const user = data.users.find(
-    (item) => item.username === username
+    (item) => item.username.toLowerCase() === username.toLowerCase()
   );
 
   if (!user) {
@@ -262,7 +265,7 @@ app.get("/api/users", requireLogin, (req, res) => {
   res.json({ users });
 });
 
-/* ENVOYER UN MESSAGE */
+/* MESSAGES */
 
 app.post("/api/messages", requireLogin, (req, res) => {
   const receiverId = cleanText(req.body.receiverId, 100);
@@ -307,8 +310,6 @@ app.post("/api/messages", requireLogin, (req, res) => {
   });
 });
 
-/* RÉCUPÉRER UNE CONVERSATION */
-
 app.get("/api/messages/:userId", requireLogin, (req, res) => {
   const otherUserId = req.params.userId;
   const data = loadData();
@@ -345,12 +346,12 @@ app.get("/api/messages/:userId", requireLogin, (req, res) => {
 app.get("/api/notifications", requireLogin, (req, res) => {
   const data = loadData();
 
-  const notifications = [...data.notifications].reverse();
-
-  res.json({ notifications });
+  res.json({
+    notifications: [...data.notifications].reverse()
+  });
 });
 
-/* DEMANDE DE LANCEMENT */
+/* DEMANDES DE LANCEMENT */
 
 app.post("/api/launch-requests", requireLogin, (req, res) => {
   const reason = cleanText(req.body.reason, 1000);
@@ -363,16 +364,15 @@ app.post("/api/launch-requests", requireLogin, (req, res) => {
 
   const data = loadData();
 
-  const request = {
+  data.launchRequests.push({
     id: createId(),
     userId: req.currentUser.id,
     username: req.currentUser.username,
     reason,
     status: "pending",
     createdAt: new Date().toISOString()
-  };
+  });
 
-  data.launchRequests.push(request);
   saveData(data);
 
   res.status(201).json({
@@ -401,7 +401,7 @@ app.post("/api/staff-applications", requireLogin, (req, res) => {
 
   const data = loadData();
 
-  const application = {
+  data.staffApplications.push({
     id: createId(),
     userId: req.currentUser.id,
     username: req.currentUser.username,
@@ -410,9 +410,8 @@ app.post("/api/staff-applications", requireLogin, (req, res) => {
     motivation,
     status: "pending",
     createdAt: new Date().toISOString()
-  };
+  });
 
-  data.staffApplications.push(application);
   saveData(data);
 
   res.status(201).json({
@@ -539,7 +538,6 @@ app.patch(
   requireAdmin,
   (req, res) => {
     const isBanned = Boolean(req.body.isBanned);
-
     const data = loadData();
 
     const user = data.users.find(
@@ -585,15 +583,14 @@ app.post(
 
     const data = loadData();
 
-    const notification = {
+    data.notifications.push({
       id: createId(),
       title,
       content,
       createdAt: new Date().toISOString(),
       author: req.currentUser.username
-    };
+    });
 
-    data.notifications.push(notification);
     saveData(data);
 
     res.status(201).json({
@@ -608,6 +605,8 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-app.listen(PORT, () => {
-  console.log(`SAN SMP lancé sur http://localhost:${PORT}`);
+/* DÉMARRAGE RENDER */
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`SAN SMP lancé sur le port ${PORT}`);
 });
