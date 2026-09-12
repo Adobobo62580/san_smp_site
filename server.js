@@ -47,6 +47,24 @@ function saveData(data) {
   fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
 }
 
+function ensureConfiguredAdmin() {
+  const data = readData();
+
+  const admin = data.users.find(
+    user =>
+      user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase()
+  );
+
+  if (admin && process.env.ADMIN_PASSWORD && !admin.isAdmin) {
+    admin.isAdmin = true;
+    saveData(data);
+
+    console.log(
+      `Le compte ${ADMIN_USERNAME} est maintenant administrateur.`
+    );
+  }
+}
+
 app.use(express.json({ limit: "30kb" }));
 
 app.set("trust proxy", 1);
@@ -137,7 +155,8 @@ app.post("/api/register", async (req, res) => {
 
     if (
       data.users.some(
-        user => user.username.toLowerCase() === username.toLowerCase()
+        user =>
+          user.username.toLowerCase() === username.toLowerCase()
       )
     ) {
       return res.status(409).json({
@@ -149,14 +168,14 @@ app.post("/api/register", async (req, res) => {
 
     const isAdmin =
       username.toLowerCase() === ADMIN_USERNAME.toLowerCase() &&
-      process.env.ADMIN_PASSWORD &&
+      Boolean(process.env.ADMIN_PASSWORD) &&
       password === process.env.ADMIN_PASSWORD;
 
     const user = {
       id: Date.now(),
       username,
       passwordHash,
-      isAdmin: Boolean(isAdmin),
+      isAdmin,
       createdAt: new Date().toISOString()
     };
 
@@ -200,7 +219,8 @@ app.post("/api/login", async (req, res) => {
     const data = readData();
 
     const user = data.users.find(
-      user => user.username.toLowerCase() === username.toLowerCase()
+      user =>
+        user.username.toLowerCase() === username.toLowerCase()
     );
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
@@ -209,10 +229,24 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
+    if (
+      user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase() &&
+      process.env.ADMIN_PASSWORD &&
+      password === process.env.ADMIN_PASSWORD &&
+      !user.isAdmin
+    ) {
+      user.isAdmin = true;
+      saveData(data);
+
+      console.log(
+        `Le compte ${user.username} est maintenant administrateur.`
+      );
+    }
+
     req.session.user = {
       id: user.id,
       username: user.username,
-      isAdmin: user.isAdmin
+      isAdmin: Boolean(user.isAdmin)
     };
 
     req.session.save(error => {
@@ -506,6 +540,8 @@ app.post("/api/notifications/:id/read", requireLogin, (req, res) => {
 // ====================
 // DÉMARRAGE
 // ====================
+
+ensureConfiguredAdmin();
 
 app.listen(PORT, () => {
   console.log(`SAN SMP lancé sur le port ${PORT}`);
