@@ -1,16 +1,24 @@
 const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const ADMIN_USERNAME = "Adosaurus3614";
-const DATA_FILE = path.join(__dirname, "data", "site-data.json");
 
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  throw new Error(
+    "SUPABASE_URL ou SUPABASE_KEY manque dans les variables d'environnement."
+  );
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -43,22 +51,50 @@ function defaultData() {
   };
 }
 
+let memoryData = defaultData();
+
 function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  memoryData = data;
+
+  supabase
+    .from("site_data")
+    .upsert({
+      id: 1,
+      data,
+      updated_at: new Date().toISOString()
+    })
+    .then(({ error }) => {
+      if (error) {
+        console.error("Erreur sauvegarde Supabase :", error.message);
+      }
+    });
 }
 
 function loadData() {
-  if (!fs.existsSync(DATA_FILE)) {
-    const data = defaultData();
-    saveData(data);
-    return data;
+  return memoryData;
+}
+
+async function initializeData() {
+  const { data, error } = await supabase
+    .from("site_data")
+    .select("data")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Impossible de charger Supabase : ${error.message}`
+    );
   }
 
-  try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-  } catch {
-    return defaultData();
+  if (data && data.data) {
+    memoryData = data.data;
+  } else {
+    memoryData = defaultData();
+    saveData(memoryData);
   }
+
+  console.log("Données Supabase chargées.");
 }
 
 function cleanText(value, maxLength) {
@@ -622,6 +658,13 @@ app.get("/", (req, res) => {
 
 /* DÉMARRAGE */
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`SAN SMP lancé sur le port ${PORT}`);
-});
+initializeData()
+  .then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`SAN SMP lancé sur le port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
