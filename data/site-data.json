@@ -1,7 +1,13 @@
 {
-  "users": [],
-  "messages": [],
-  "notifications": [],
-  "launchRequests": [],
-  "staffApplications": []
+  "name": "san-smp-site",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
+    "express-session": "^1.18.0"
+  }
 }
