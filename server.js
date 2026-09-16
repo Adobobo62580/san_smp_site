@@ -57,9 +57,6 @@ let memoryData = defaultData();
 function saveData(data) {
   memoryData = data;
 
-  function saveData(data) {
-  memoryData = data;
-
   supabase
     .from("site_data")
     .upsert({
