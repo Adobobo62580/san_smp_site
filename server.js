@@ -103,9 +103,7 @@ async function initializeData() {
 
   console.log("Données Supabase chargées.");
 }
-  console.log("Données Supabase chargées.");
-}
-
+ 
 function cleanText(value, maxLength) {
   if (typeof value !== "string") return "";
 
