@@ -3,6 +3,7 @@ const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
+const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -56,6 +57,9 @@ let memoryData = defaultData();
 function saveData(data) {
   memoryData = data;
 
+  function saveData(data) {
+  memoryData = data;
+
   supabase
     .from("site_data")
     .upsert({
@@ -65,7 +69,10 @@ function saveData(data) {
     })
     .then(({ error }) => {
       if (error) {
-        console.error("Erreur sauvegarde Supabase :", error.message);
+        console.error(
+          "Erreur sauvegarde Supabase :",
+          error.message
+        );
       }
     });
 }
@@ -94,6 +101,8 @@ async function initializeData() {
     saveData(memoryData);
   }
 
+  console.log("Données Supabase chargées.");
+}
   console.log("Données Supabase chargées.");
 }
 
