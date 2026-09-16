@@ -20,6 +20,7 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -38,6 +39,8 @@ app.use(
   })
 );
 
+/* OUTILS */
+
 function createId() {
   return crypto.randomUUID();
 }
@@ -45,7 +48,6 @@ function createId() {
 function defaultData() {
   return {
     users: [],
-    messages: [],
     notifications: [],
     launchRequests: [],
     staffApplications: []
@@ -93,6 +95,31 @@ async function initializeData() {
 
   if (data && data.data) {
     memoryData = data.data;
+
+    /*
+      Migration des anciennes données :
+      si l'ancien tableau messages existe encore,
+      on le supprime de la mémoire et de Supabase.
+    */
+    delete memoryData.messages;
+
+    if (!Array.isArray(memoryData.users)) {
+      memoryData.users = [];
+    }
+
+    if (!Array.isArray(memoryData.notifications)) {
+      memoryData.notifications = [];
+    }
+
+    if (!Array.isArray(memoryData.launchRequests)) {
+      memoryData.launchRequests = [];
+    }
+
+    if (!Array.isArray(memoryData.staffApplications)) {
+      memoryData.staffApplications = [];
+    }
+
+    saveData(memoryData);
   } else {
     memoryData = defaultData();
     saveData(memoryData);
@@ -100,9 +127,42 @@ async function initializeData() {
 
   console.log("Données Supabase chargées.");
 }
- 
+
+function addNotification(userId, message, type = "info") {
+  const data = loadData();
+
+  if (!Array.isArray(data.notifications)) {
+    data.notifications = [];
+  }
+
+  data.notifications.push({
+    id: createId(),
+    userId,
+    message,
+    type,
+    read: false,
+    createdAt: new Date().toISOString()
+  });
+
+  saveData(data);
+}
+
+function notifyAdmin(message, type = "info") {
+  const data = loadData();
+
+  const admin = data.users.find(
+    (user) => user.username === ADMIN_USERNAME
+  );
+
+  if (admin) {
+    addNotification(admin.id, message, type);
+  }
+}
+
 function cleanText(value, maxLength) {
-  if (typeof value !== "string") return "";
+  if (typeof value !== "string") {
+    return "";
+  }
 
   return value.trim().slice(0, maxLength);
 }
@@ -119,6 +179,8 @@ function publicUser(user) {
     isBanned: user.isBanned
   };
 }
+
+/* AUTHENTIFICATION */
 
 function requireLogin(req, res, next) {
   if (!req.session.userId) {
@@ -241,6 +303,7 @@ app.post("/api/register", async (req, res) => {
   };
 
   data.users.push(user);
+
   saveData(data);
 
   res.status(201).json({
@@ -320,95 +383,24 @@ app.get("/api/users", requireLogin, (req, res) => {
   });
 });
 
-/* MESSAGES */
-
-app.post("/api/messages", requireLogin, (req, res) => {
-  const receiverId = cleanText(req.body.receiverId, 100);
-  const content = cleanText(req.body.content, 500);
-
-  if (!receiverId || !content) {
-    return res.status(400).json({
-      error: "Le destinataire et le message sont obligatoires."
-    });
-  }
-
-  const data = loadData();
-
-  const receiver = data.users.find(
-    (user) =>
-      user.id === receiverId &&
-      !user.isBanned
-  );
-
-  if (!receiver) {
-    return res.status(404).json({
-      error: "Destinataire introuvable."
-    });
-  }
-
-  const message = {
-    id: createId(),
-    senderId: req.currentUser.id,
-    senderUsername: req.currentUser.username,
-    receiverId: receiver.id,
-    receiverUsername: receiver.username,
-    content,
-    createdAt: new Date().toISOString()
-  };
-
-  data.messages.push(message);
-  saveData(data);
-
-  res.status(201).json({
-    message: "Message envoyé.",
-    sentMessage: message
-  });
-});
-
-app.get("/api/messages/:userId", requireLogin, (req, res) => {
-  const otherUserId = req.params.userId;
-  const data = loadData();
-
-  const otherUser = data.users.find(
-    (user) =>
-      user.id === otherUserId &&
-      !user.isBanned
-  );
-
-  if (!otherUser) {
-    return res.status(404).json({
-      error: "Utilisateur introuvable."
-    });
-  }
-
-  const messages = data.messages.filter((message) => {
-    const conversation =
-      message.senderId === req.currentUser.id &&
-      message.receiverId === otherUserId;
-
-    const reverseConversation =
-      message.senderId === otherUserId &&
-      message.receiverId === req.currentUser.id;
-
-    return conversation || reverseConversation;
-  });
-
-  res.json({
-    messages
-  });
-});
-
-/* NOTIFICATIONS : LECTURE UNIQUEMENT */
+/* NOTIFICATIONS */
 
 app.get("/api/notifications", requireLogin, (req, res) => {
   const data = loadData();
 
+  const notifications = data.notifications
+    .filter(
+      (notification) =>
+        notification.userId === req.currentUser.id
+    )
+    .reverse();
+
   res.json({
-    notifications: [...data.notifications].reverse()
+    notifications
   });
 });
 
-/* DEMANDES DE LANCEMENT */
+/* DEMANDES DE LANCEMENT AT​​ERNOS */
 
 app.post("/api/launch-requests", requireLogin, (req, res) => {
   const reason = cleanText(req.body.reason, 1000);
@@ -421,16 +413,23 @@ app.post("/api/launch-requests", requireLogin, (req, res) => {
 
   const data = loadData();
 
-  data.launchRequests.push({
+  const request = {
     id: createId(),
     userId: req.currentUser.id,
     username: req.currentUser.username,
     reason,
     status: "pending",
     createdAt: new Date().toISOString()
-  });
+  };
+
+  data.launchRequests.push(request);
 
   saveData(data);
+
+  notifyAdmin(
+    `${req.currentUser.username} a envoyé une demande de lancement Aternos.`,
+    "launch-request"
+  );
 
   res.status(201).json({
     message: "Demande envoyée."
@@ -458,7 +457,7 @@ app.post("/api/staff-applications", requireLogin, (req, res) => {
 
   const data = loadData();
 
-  data.staffApplications.push({
+  const application = {
     id: createId(),
     userId: req.currentUser.id,
     username: req.currentUser.username,
@@ -467,9 +466,16 @@ app.post("/api/staff-applications", requireLogin, (req, res) => {
     motivation,
     status: "pending",
     createdAt: new Date().toISOString()
-  });
+  };
+
+  data.staffApplications.push(application);
 
   saveData(data);
+
+  notifyAdmin(
+    `${req.currentUser.username} a envoyé une candidature staff.`,
+    "staff-request"
+  );
 
   res.status(201).json({
     message: "Candidature envoyée."
@@ -519,6 +525,22 @@ app.patch(
     request.status = status;
 
     saveData(data);
+
+    if (status === "accepted") {
+      addNotification(
+        request.userId,
+        "C'est bon, tu peux lancer le serveur Aternos.",
+        "launch-accepted"
+      );
+    }
+
+    if (status === "rejected") {
+      addNotification(
+        request.userId,
+        "Ta demande de lancement Aternos a été refusée.",
+        "launch-rejected"
+      );
+    }
 
     res.json({
       message: "Demande mise à jour."
@@ -570,6 +592,22 @@ app.patch(
 
     saveData(data);
 
+    if (status === "accepted") {
+      addNotification(
+        application.userId,
+        "Ta candidature staff a été acceptée.",
+        "staff-accepted"
+      );
+    }
+
+    if (status === "rejected") {
+      addNotification(
+        application.userId,
+        "Ta candidature staff a été refusée.",
+        "staff-rejected"
+      );
+    }
+
     res.json({
       message: "Candidature mise à jour."
     });
@@ -591,7 +629,7 @@ app.get(
   }
 );
 
-/* ADMIN : BANNIR OU DÉBANNIR UN UTILISATEUR */
+/* ADMIN : BANNIR OU DÉBANNIR */
 
 app.patch(
   "/api/admin/users/:id/ban",
@@ -601,12 +639,6 @@ app.patch(
     const targetUserId = String(req.params.id);
     const currentUserId = String(req.currentUser.id);
     const isBanned = Boolean(req.body.isBanned);
-
-    /*
-      Protection importante :
-      l'administrateur ne peut jamais se bannir lui-même,
-      même si la requête est envoyée directement au backend.
-    */
 
     if (targetUserId === currentUserId) {
       return res.status(403).json({
@@ -625,11 +657,6 @@ app.patch(
         error: "Utilisateur introuvable."
       });
     }
-
-    /*
-      Deuxième protection :
-      le compte administrateur principal ne peut jamais être banni.
-    */
 
     if (
       user.isAdmin ||
@@ -669,6 +696,6 @@ initializeData()
     });
   })
   .catch((error) => {
-    console.error(error);
+    console.error("Erreur au démarrage :", error);
     process.exit(1);
   });
